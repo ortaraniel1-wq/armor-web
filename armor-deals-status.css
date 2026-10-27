@@ -1,0 +1,9 @@
+.am-promo-deals[aria-disabled="true"]{background:#e5e6dc;color:#626653;cursor:default;box-shadow:none;transform:none}
+.am-promo-deals[aria-disabled="true"] img{filter:grayscale(1);opacity:.45}
+.armor-deals-page.armor-deals-inactive .dealhero,.armor-deals-page.armor-deals-inactive #deals,.armor-deals-page.armor-deals-inactive header.top,.armor-deals-page.armor-deals-inactive .novh,.armor-deals-page.armor-deals-inactive nav a.hot{display:none!important}
+#armor-deals-paused{max-width:780px;margin:50px auto;padding:44px 25px;text-align:center;border-radius:18px;background:#f4f500;color:#16171a;font-family:Arial,sans-serif}
+#armor-deals-paused[hidden]{display:none!important}
+#armor-deals-paused h1{font-size:clamp(28px,5vw,44px);margin:8px 0 15px}
+#armor-deals-paused p{line-height:1.6}
+#armor-deals-paused a{display:inline-block;padding:14px 22px;background:#16171a;color:white;border-radius:9px;text-decoration:none;font-weight:700}
+@media(max-width:680px){#armor-deals-paused{margin:25px 16px}}

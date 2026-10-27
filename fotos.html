@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Fotos · Armor Market</title>
+<style>
+:root{--y:#FDF500;--k:#16171A;--g:#f3f3ef;--b:#e2e2dc;--ok:#1f9d55;--er:#c62828}
+*{box-sizing:border-box}body{margin:0;font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--g);color:var(--k)}
+header{background:var(--k);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px}
+header b{color:var(--y);font-size:18px}header span{opacity:.7;font-size:13px}header button{margin-left:auto}
+main{max-width:980px;margin:0 auto;padding:16px}
+.box{background:#fff;border:1px solid var(--b);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 10px;font-size:17px}
+input,button{font:inherit}input[type=text],input[type=password]{width:100%;padding:11px 12px;border:1px solid var(--b);border-radius:10px;font-size:16px}
+button{border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer;background:var(--y);color:var(--k)}
+button.sec{background:#eee}button.dark{background:var(--k);color:#fff}button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1 1 220px}
+#res{margin-top:8px;max-height:260px;overflow:auto}
+.it{display:flex;gap:10px;align-items:center;padding:6px;border-radius:10px;cursor:pointer}.it:hover{background:var(--g)}
+.it img{width:44px;height:44px;object-fit:contain;background:#fff;border:1px solid var(--b);border-radius:8px}
+.it small{color:#777}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:640px){.cmp{grid-template-columns:1fr}}
+.pane{border:1px dashed #bbb;border-radius:12px;padding:10px;text-align:center;background:#fafaf7}
+.pane img,.pane canvas{width:100%;max-width:320px;aspect-ratio:1;object-fit:contain;background:#fff;border-radius:8px}
+#drop{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;outline:none}
+#drop.on{border-color:var(--k);background:#fffde0}
+.msg{padding:10px 12px;border-radius:10px;margin-top:10px;display:none}.msg.ok{display:block;background:#e7f6ec;color:var(--ok)}.msg.er{display:block;background:#fdeaea;color:var(--er)}
+.hint{color:#666;font-size:13px}
+#hist .it{cursor:default}
+.hide{display:none}
+</style></head><body>
+<header><b>ARMOR · Fotos de la web</b><span id="who"></span><button class="sec hide" id="salir">Salir</button></header>
+<main>
+<section class="box" id="login">
+  <h2>Entrar</h2>
+  <div class="row"><input type="password" id="pin" inputmode="numeric" placeholder="PIN de fotos" autocomplete="off"><button id="entrar" style="flex:0 0 auto">Entrar</button></div>
+  <div class="msg" id="lmsg"></div>
+</section>
+
+<div id="app" class="hide">
+<section class="box">
+  <h2>1 · Busca el producto</h2>
+  <input type="text" id="q" placeholder="Código Boleíta, código de barra o nombre (ej. 6264, camay, hisense 55)">
+  <div id="res"></div>
+</section>
+
+<section class="box">
+  <h2>2 · Pega la foto nueva</h2>
+  <p class="hint" id="sel">Primero elige un producto.</p>
+  <div class="cmp">
+    <div class="pane"><div class="hint">Foto actual</div><img id="actual" alt=""></div>
+    <div class="pane" id="drop" tabindex="0">
+      <canvas id="cv" width="800" height="800" class="hide"></canvas>
+      <div id="dz"><b>Ctrl + V</b> para pegar la foto<br><span class="hint">o arrástrala aquí · o pega el enlace de la imagen</span></div>
+      <label class="hint"><input type="file" id="file" accept="image/*"> Elegir archivo / cámara</label>
+    </div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button id="guardar" disabled>Guardar foto en la web</button>
+    <button class="sec" id="limpiar" style="flex:0 0 auto">Cancelar</button>
+    <button class="sec" id="quitar" style="flex:0 0 auto" disabled>Volver a la foto original</button>
+  </div>
+  <div class="msg" id="msg"></div>
+  <p class="hint">La foto se pone sola sobre fondo blanco, cuadrada. En la web se ve en 1 a 5 minutos (recarga la página).</p>
+</section>
+
+<section class="box">
+  <h2>Fotos cambiadas</h2>
+  <div id="hist" class="hint">Cargando…</div>
+</section>
+</div>
+</main>
+<script src="fotos-config.js?v=1"></script>
+<script>
+(function(){
+var RAW='https://raw.githubusercontent.com/ortaraniel1-wq/armor-catalogo-datos/main/';
+var API=window.FOTOS_API||'', PIN='', P={}, S={}, F={}, cur=null, ready=false;
+var $=function(i){return document.getElementById(i)};
+function msg(id,t,ok){var m=$(id);m.className='msg '+(ok?'ok':'er');m.textContent=t;}
+function norm(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
+function api(d){return fetch(API,{method:'POST',body:JSON.stringify(d)}).then(function(r){return r.json()});}
+function fotoUrl(k){var f=F[k];return f?RAW+'fotos/'+encodeURIComponent(k)+'.jpg?v='+f.v:(P[k]&&P[k].i)||'';}
+function cargar(){
+  return Promise.all([
+    fetch('pedidos-productos.json?t='+Date.now()).then(function(r){return r.json()}).catch(function(){return {}}),
+    fetch(RAW+'stock.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){return j.p||{}}).catch(function(){return {}}),
+    fetch(RAW+'fotos.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():{}}).catch(function(){return {}})
+  ]).then(function(a){P=a[0];S=a[1];F=a[2];hist();});
+}
+function hist(){var ks=Object.keys(F).sort(function(a,b){return F[b].v-F[a].v});
+  $('hist').innerHTML=ks.length?'':'Todavía no hay fotos cambiadas.';
+  ks.slice(0,60).forEach(function(k){var d=document.createElement('div');d.className='it';
+    d.innerHTML='<img src="'+fotoUrl(k)+'"><div><b></b><br><small></small></div>';
+    d.querySelector('b').textContent=F[k].n||(P[k]&&P[k].n)||k;
+    d.querySelector('small').textContent='Cód. '+((S[k]&&S[k][2])||k.replace(/^B/,''))+' · '+new Date(F[k].v).toLocaleString('es-VE')+(F[k].por?' · '+F[k].por:'');
+    $('hist').appendChild(d);});}
+function buscar(){var q=norm($('q').value.trim());var out=$('res');out.innerHTML='';if(q.length<2)return;
+  var ws=q.split(/\s+/),n=0;
+  Object.keys(P).some(function(k){var co=(S[k]&&S[k][2])||'';var t=norm(P[k].n+' '+k+' '+co);
+    var hit=('b'+q===norm(k))||co===q||k===q||ws.every(function(w){return t.indexOf(w)>=0});
+    if(hit){n++;var d=document.createElement('div');d.className='it';
+      d.innerHTML='<img src="'+fotoUrl(k)+'"><div><b></b><br><small></small></div>';
+      d.querySelector('b').textContent=P[k].n;d.querySelector('small').textContent='Cód. Boleíta: '+(co||k.replace(/^B/,''))+' · '+(P[k].s||'')+(F[k]?' · foto cambiada':'');
+      d.onclick=function(){elegir(k)};out.appendChild(d);}
+    return n>=40;});
+  if(!n)out.innerHTML='<p class="hint">No aparece en la web. Revisa el código.</p>';}
+function elegir(k){cur=k;$('sel').textContent=P[k].n+'  ·  Cód. '+((S[k]&&S[k][2])||k.replace(/^B/,''));
+  $('actual').src=fotoUrl(k);$('quitar').disabled=!F[k];$('res').innerHTML='';$('q').value='';limpiar();$('drop').focus();}
+function limpiar(){ready=false;$('cv').classList.add('hide');$('dz').classList.remove('hide');$('guardar').disabled=true;}
+function dibujar(img){var c=$('cv'),x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,800,800);
+  var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,m=40,s=Math.min((800-2*m)/w,(800-2*m)/h);
+  var dw=w*s,dh=h*s;x.drawImage(img,(800-dw)/2,(800-dh)/2,dw,dh);
+  c.classList.remove('hide');$('dz').classList.add('hide');ready=true;$('guardar').disabled=!cur;
+  if(!cur)msg('msg','Ahora elige el producto arriba.',false);}
+function desdeBlob(b){var u=URL.createObjectURL(b),i=new Image();i.onload=function(){dibujar(i);URL.revokeObjectURL(u)};i.onerror=function(){msg('msg','Esa imagen no se pudo leer.',false)};i.src=u;}
+function desdeUrl(u){var i=new Image();i.crossOrigin='anonymous';i.onload=function(){dibujar(i)};
+  i.onerror=function(){msg('msg','No se pudo abrir ese enlace. Copia la imagen (clic derecho → Copiar imagen) y pégala.',false)};
+  i.src='https://wsrv.nl/?url='+encodeURIComponent(u)+'&w=1000&h=1000&fit=inside&output=png';}
+document.addEventListener('paste',function(e){if(document.activeElement===$('q')||document.activeElement===$('pin'))return;
+  var it=(e.clipboardData||{}).items||[];for(var i=0;i<it.length;i++){if(it[i].type.indexOf('image')===0){desdeBlob(it[i].getAsFile());e.preventDefault();return;}}
+  var t=(e.clipboardData.getData('text')||'').trim();if(/^https?:\/\//.test(t)){desdeUrl(t);e.preventDefault();}});
+var dr=$('drop');['dragenter','dragover'].forEach(function(ev){dr.addEventListener(ev,function(e){e.preventDefault();dr.classList.add('on')})});
+['dragleave','drop'].forEach(function(ev){dr.addEventListener(ev,function(){dr.classList.remove('on')})});
+dr.addEventListener('drop',function(e){e.preventDefault();var f=e.dataTransfer.files[0];if(f)return desdeBlob(f);var u=e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text');if(u)desdeUrl(u.trim());});
+$('file').onchange=function(){if(this.files[0])desdeBlob(this.files[0]);this.value='';};
+$('q').oninput=buscar;$('limpiar').onclick=limpiar;
+$('guardar').onclick=function(){if(!cur||!ready)return;var b=this;b.disabled=true;b.textContent='Guardando…';
+  var data=$('cv').toDataURL('image/jpeg',0.86).split(',')[1];
+  api({accion:'subir',pin:PIN,clave:cur,nombre:P[cur].n,img:data,por:localStorage.getItem('fotos_por')||''}).then(function(r){
+    if(!r.ok)throw new Error(r.error||'Error');F[cur]={v:r.v,n:P[cur].n,por:localStorage.getItem('fotos_por')||''};$('actual').src=fotoUrl(cur);$('quitar').disabled=false;limpiar();hist();
+    msg('msg','Listo. La foto nueva se ve en la web en 1 a 5 minutos.',true);
+  }).catch(function(e){msg('msg','No se guardó: '+e.message,false);}).then(function(){b.textContent='Guardar foto en la web';b.disabled=!ready;});};
+$('quitar').onclick=function(){if(!cur||!F[cur])return;if(!confirm('¿Volver a la foto original de '+P[cur].n+'?'))return;
+  api({accion:'quitar',pin:PIN,clave:cur}).then(function(r){if(!r.ok)throw new Error(r.error);delete F[cur];$('actual').src=fotoUrl(cur);$('quitar').disabled=true;hist();msg('msg','Listo, vuelve a la foto original en unos minutos.',true);})
+  .catch(function(e){msg('msg','No se pudo: '+e.message,false)});};
+function entrar(pin,auto){if(!API){msg('lmsg','Falta configurar la dirección del Apps Script (fotos-config.js).',false);return;}
+  $('entrar').disabled=true;
+  fetch(API+'?accion=entrar&pin='+encodeURIComponent(pin)).then(function(r){return r.json()}).then(function(r){
+    if(!r.ok)throw new Error(r.error||'PIN incorrecto');PIN=pin;try{sessionStorage.setItem('fotos_pin',pin)}catch(e){}
+    $('login').classList.add('hide');$('app').classList.remove('hide');$('salir').classList.remove('hide');$('who').textContent='Conectado';
+    if(!localStorage.getItem('fotos_por')){var n=prompt('Tu nombre (para saber quién cambió cada foto):')||'';try{localStorage.setItem('fotos_por',n)}catch(e){}}
+    return cargar();
+  }).catch(function(e){if(!auto)msg('lmsg',e.message,false);try{sessionStorage.removeItem('fotos_pin')}catch(x){}}).then(function(){$('entrar').disabled=false;});}
+$('entrar').onclick=function(){entrar($('pin').value.trim())};$('pin').onkeydown=function(e){if(e.key==='Enter')$('entrar').click()};
+$('salir').onclick=function(){try{sessionStorage.removeItem('fotos_pin')}catch(e){}location.reload();};
+try{var sp=sessionStorage.getItem('fotos_pin');if(sp)entrar(sp,true);}catch(e){}
+})();
+</script></body></html>

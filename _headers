@@ -1,0 +1,27 @@
+# Fotos y logos: el teléfono los guarda 7 días y no los vuelve a pedir
+/img/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+# Tipografías: nunca cambian
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Imágenes de vista previa (WhatsApp / Instagram)
+/og*.jpg
+  Cache-Control: public, max-age=604800
+
+# Página interna de pedidos de reposición: fuera de Google
+/pedidos*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-cache
+/pedidos-config.js
+  Cache-Control: no-cache
+
+# Página interna para cambiar fotos: fuera de Google
+/fotos*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-cache
+/fotos-config.js
+  Cache-Control: no-cache
+/fotos-live.js
+  Cache-Control: no-cache
