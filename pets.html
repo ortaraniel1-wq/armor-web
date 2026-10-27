@@ -101,6 +101,8 @@ function go(scroll){iq.value=q.value;iq.dispatchEvent(new Event('input'));var c=
  if(scroll)document.getElementById('inventario').scrollIntoView({behavior:'smooth',block:'start'});}
 var tm;q.addEventListener('input',function(){clearTimeout(tm);tm=setTimeout(function(){go(q.value.trim().length>1)},350)});
 f.addEventListener('submit',function(e){e.preventDefault();go(true);q.blur();});
-iq.addEventListener('input',function(){if(document.activeElement===iq)q.value=iq.value;});})();
+iq.addEventListener('input',function(){if(document.activeElement===iq)q.value=iq.value;});
+var pq=new URLSearchParams(location.search).get('q');if(pq){q.value=pq;setTimeout(function(){go(true)},900);}})();
 </script>
+<script src="armorking-config.js?v=1"></script><script src="armorking.js?v=1" defer></script>
 </body></html>
