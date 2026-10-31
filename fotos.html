@@ -72,11 +72,12 @@ button.sec{background:#eee}button.dark{background:var(--k);color:#fff}button:dis
 <script>
 (function(){
 var RAW='https://raw.githubusercontent.com/ortaraniel1-wq/armor-catalogo-datos/main/';
-var API=window.FOTOS_API||'', PIN='', P={}, S={}, F={}, cur=null, ready=false;
+var API=window.FOTOS_API||'', TOKEN='', P={}, S={}, F={}, cur=null, ready=false;
 var $=function(i){return document.getElementById(i)};
 function msg(id,t,ok){var m=$(id);m.className='msg '+(ok?'ok':'er');m.textContent=t;}
 function norm(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
-function api(d){return fetch(API,{method:'POST',body:JSON.stringify(d)}).then(function(r){return r.json()});}
+function api(d){return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)}).then(function(r){return r.json()})
+  .then(function(r){if(r&&r.sesion===false){TOKEN='';try{sessionStorage.removeItem('fotos_token')}catch(e){}}return r;});}
 function fotoUrl(k){var f=F[k];return f?RAW+'fotos/'+encodeURIComponent(k)+'.jpg?v='+f.v:(P[k]&&P[k].i)||'';}
 function cargar(){
   return Promise.all([
@@ -124,23 +125,23 @@ $('file').onchange=function(){if(this.files[0])desdeBlob(this.files[0]);this.val
 $('q').oninput=buscar;$('limpiar').onclick=limpiar;
 $('guardar').onclick=function(){if(!cur||!ready)return;var b=this;b.disabled=true;b.textContent='Guardando…';
   var data=$('cv').toDataURL('image/jpeg',0.86).split(',')[1];
-  api({accion:'subir',pin:PIN,clave:cur,nombre:P[cur].n,img:data,por:localStorage.getItem('fotos_por')||''}).then(function(r){
+  api({accion:'subir',token:TOKEN,clave:cur,nombre:P[cur].n,img:data,por:localStorage.getItem('fotos_por')||''}).then(function(r){
     if(!r.ok)throw new Error(r.error||'Error');F[cur]={v:r.v,n:P[cur].n,por:localStorage.getItem('fotos_por')||''};$('actual').src=fotoUrl(cur);$('quitar').disabled=false;limpiar();hist();
     msg('msg','Listo. La foto nueva se ve en la web en 1 a 5 minutos.',true);
   }).catch(function(e){msg('msg','No se guardó: '+e.message,false);}).then(function(){b.textContent='Guardar foto en la web';b.disabled=!ready;});};
 $('quitar').onclick=function(){if(!cur||!F[cur])return;if(!confirm('¿Volver a la foto original de '+P[cur].n+'?'))return;
-  api({accion:'quitar',pin:PIN,clave:cur}).then(function(r){if(!r.ok)throw new Error(r.error);delete F[cur];$('actual').src=fotoUrl(cur);$('quitar').disabled=true;hist();msg('msg','Listo, vuelve a la foto original en unos minutos.',true);})
+  api({accion:'quitar',token:TOKEN,clave:cur}).then(function(r){if(!r.ok)throw new Error(r.error);delete F[cur];$('actual').src=fotoUrl(cur);$('quitar').disabled=true;hist();msg('msg','Listo, vuelve a la foto original en unos minutos.',true);})
   .catch(function(e){msg('msg','No se pudo: '+e.message,false)});};
 function entrar(pin,auto){if(!API){msg('lmsg','Falta configurar la dirección del Apps Script (fotos-config.js).',false);return;}
   $('entrar').disabled=true;
-  fetch(API+'?accion=entrar&pin='+encodeURIComponent(pin)).then(function(r){return r.json()}).then(function(r){
-    if(!r.ok)throw new Error(r.error||'PIN incorrecto');PIN=pin;try{sessionStorage.setItem('fotos_pin',pin)}catch(e){}
+  (auto?api({accion:'sesion',token:pin}).then(function(r){r.token=pin;return r}):api({accion:'entrar',pin:pin})).then(function(r){
+    if(!r.ok)throw new Error(r.error||'PIN incorrecto');TOKEN=r.token;try{sessionStorage.setItem('fotos_token',TOKEN)}catch(e){}
     $('login').classList.add('hide');$('app').classList.remove('hide');$('salir').classList.remove('hide');$('who').textContent='Conectado';
     if(!localStorage.getItem('fotos_por')){var n=prompt('Tu nombre (para saber quién cambió cada foto):')||'';try{localStorage.setItem('fotos_por',n)}catch(e){}}
     return cargar();
-  }).catch(function(e){if(!auto)msg('lmsg',e.message,false);try{sessionStorage.removeItem('fotos_pin')}catch(x){}}).then(function(){$('entrar').disabled=false;});}
+  }).catch(function(e){if(!auto)msg('lmsg',e.message,false);try{sessionStorage.removeItem('fotos_token')}catch(x){}}).then(function(){$('entrar').disabled=false;});}
 $('entrar').onclick=function(){entrar($('pin').value.trim())};$('pin').onkeydown=function(e){if(e.key==='Enter')$('entrar').click()};
-$('salir').onclick=function(){try{sessionStorage.removeItem('fotos_pin')}catch(e){}location.reload();};
-try{var sp=sessionStorage.getItem('fotos_pin');if(sp)entrar(sp,true);}catch(e){}
+$('salir').onclick=function(){TOKEN='';try{sessionStorage.removeItem('fotos_token')}catch(e){}location.reload();};
+try{var sp=sessionStorage.getItem('fotos_token');if(sp)entrar(sp,true);}catch(e){}
 })();
 </script></body></html>
