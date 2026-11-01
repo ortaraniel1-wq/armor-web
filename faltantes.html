@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faltantes Boleíta · Armor Market</title>
+<style>
+  :root{--am:#FFCD11;--dark:#1b1b1b;--gris:#f3f3f3;--borde:#ddd;--rojo:#c62828;--verde:#2e7d32}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--gris);color:#222}
+  header{background:var(--dark);color:#fff;padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+  header h1{margin:0;font-size:18px}
+  header h1 span{color:var(--am)}
+  .act{font-size:12px;color:#bbb}
+  .barra{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--borde);padding:10px 16px;display:flex;flex-direction:column;gap:8px}
+  .fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .chip{border:1px solid var(--borde);background:#fff;border-radius:18px;padding:6px 12px;font-size:13px;cursor:pointer}
+  .chip.on{background:var(--am);border-color:var(--am);font-weight:600}
+  .chip small{opacity:.7}
+  input[type=search]{flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--borde);border-radius:8px;font-size:14px}
+  select{padding:7px;border:1px solid var(--borde);border-radius:8px;font-size:14px}
+  button{background:var(--dark);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
+  button.am{background:var(--am);color:#111;font-weight:600}
+  main{padding:12px 16px 60px}
+  table{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
+  th,td{padding:7px 8px;border-bottom:1px solid #eee;text-align:left;vertical-align:middle}
+  th{background:#fafafa;position:sticky;top:0}
+  td.num,th.num{text-align:right}
+  td input[type=number]{width:70px;padding:4px;border:1px solid var(--borde);border-radius:6px;text-align:right}
+  .cod{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#555}
+  .sede{font-weight:600}
+  .nov td{background:#ffebee}
+  .ok td{background:#e8f5e9}
+  .tag{font-size:11px;border-radius:4px;padding:1px 6px;background:#eee}
+  .tag.r{background:var(--rojo);color:#fff}
+  .resumen{font-size:13px;color:#555}
+  #carga{padding:40px;text-align:center;color:#666}
+  @media print{.barra,header button,.noprint{display:none!important} body{background:#fff} th{position:static}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Faltantes <span>Boleíta</span> · pedido entre sedes</h1>
+  <div class="act" id="act">Cargando…</div>
+</header>
+
+<div class="barra">
+  <div class="fila" id="rubros"></div>
+  <div class="fila">
+    <select id="origen">
+      <option value="">Traer de: todas las sedes</option>
+      <option value="CHAG">Traer de: Chaguaramos</option>
+      <option value="GUAIRA">Traer de: La Guaira</option>
+    </select>
+    <input type="search" id="q" placeholder="Buscar descripción, código o barra…">
+  </div>
+  <div class="fila">
+    <button class="am" onclick="exportPedido()">⬇ Pedido (Excel)</button>
+    <button onclick="exportNovedades()">⬇ Novedades de inventario</button>
+    <button onclick="window.print()">🖨 Imprimir</button>
+    <button onclick="limpiar()" title="Borra las cantidades físicas cargadas en este equipo">Reiniciar</button>
+    <span class="resumen" id="resumen"></span>
+  </div>
+</div>
+
+<main>
+  <div id="carga">Leyendo el inventario de las 3 sedes…</div>
+  <table id="tabla" style="display:none">
+    <thead><tr>
+      <th>Descripción</th><th>Cód. Boleíta</th><th>Barra</th>
+      <th>Traer de</th><th class="num">Disp. sistema</th>
+      <th class="num">Pedir</th><th class="num">Físico</th><th></th>
+    </tr></thead>
+    <tbody id="cuerpo"></tbody>
+  </table>
+</main>
+
+<script>
+/* ===== CONFIGURACIÓN ===== */
+const BASE = new URLSearchParams(location.search).get('base') ||
+  'https://raw.githubusercontent.com/ortaraniel1-wq/armor-catalogo-datos/main/';
+const SEDES = {
+  BOLEITA: {archivo:'conteo_BOLEITA.json', nombre:'Boleíta'},
+  CHAG:    {archivo:'conteo_CHAG.json',    nombre:'Chaguaramos'},
+  GUAIRA:  {archivo:'conteo_GUAIRA.json',  nombre:'La Guaira'}
+};
+// Cantidad sugerida = esta fracción de lo que tiene la sede de origen (mínimo 1). Editable en pantalla.
+const FRACCION_SUGERIDA = 0.5;
+// Líneas de Profit agrupadas en rubros
+const RUBROS = {
+  BODEG:'BODEGÓN', BODEGO:'BODEGÓN',
+  TECN:'TECNOLOGÍA', TECNO:'TECNOLOGÍA', APPLE:'TECNOLOGÍA', TELF:'TECNOLOGÍA', ELEC:'TECNOLOGÍA', ELECTR:'TECNOLOGÍA', GENE:'TECNOLOGÍA',
+  HOGAR:'HOGAR', REFRI:'HOGAR',
+  JUG:'JUGUETERÍA', JUGUET:'JUGUETERÍA', TOYS:'JUGUETERÍA', PLAY:'JUGUETERÍA',
+  ACCESO:'ACCESORIOS', ACCE:'ACCESORIOS',
+  CAFE:'CAFETÍN', OFIC:'OFICINA', OFICI:'OFICINA', MASCO:'MASCOTAS', PERFUM:'PERFUMERÍA'
+};
+const NO_CODIFICADO = 'NO EXISTE EN BOLEÍTA';
+/* ========================= */
+
+let filas = [], rubroSel = '', datosAct = {};
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem('falt_'+k)) }catch(e){ return null } },
+  set(k,v){ try{ localStorage.setItem('falt_'+k, JSON.stringify(v)) }catch(e){} }
+};
+let ediciones = store.get('ed') || {};   // {barra:{pedir, fisico}}
+
+function agrupar(json){
+  const c = {}; json.cols.forEach((n,i)=>c[n]=i);
+  const m = new Map();
+  for (const r of json.items){
+    const barra = String(r[c.barra]||'').trim();
+    if (barra.length < 6) continue;             // descarta barras basura (IPAD, 123…)
+    let g = m.get(barra);
+    if (!g){ g = {barra, stock:0, codigos:[], desc:'', linea:'', mejor:-1e9}; m.set(barra,g); }
+    const s = Number(r[c.stock_total])||0;
+    g.stock += s;
+    g.codigos.push(r[c.codigo]);
+    if (s > g.mejor || !g.desc){ g.mejor = s; g.desc = String(r[c.descripcion]).trim(); g.linea = r[c.linea]; g.codigo = r[c.codigo]; }
+  }
+  return m;
+}
+
+async function cargar(){
+  const jsons = await Promise.all(Object.entries(SEDES).map(async ([k,s])=>{
+    const r = await fetch(BASE + s.archivo + '?t=' + Date.now());
+    if (!r.ok) throw new Error('No pude leer ' + s.archivo);
+    const j = await r.json(); datosAct[k] = j.actualizado; return [k, agrupar(j)];
+  }));
+  const M = Object.fromEntries(jsons);
+  const B = M.BOLEITA;
+  const barras = new Set([...M.CHAG.keys(), ...M.GUAIRA.keys()]);
+  filas = [];
+  for (const barra of barras){
+    const b = B.get(barra);
+    if (b && b.stock > 0) continue;               // Boleíta sí tiene
+    const c = M.CHAG.get(barra), g = M.GUAIRA.get(barra);
+    const sc = c ? c.stock : 0, sg = g ? g.stock : 0;
+    if (sc <= 0 && sg <= 0) continue;              // nadie tiene
+    const origen = sc >= sg ? 'CHAG' : 'GUAIRA';
+    const o = origen === 'CHAG' ? c : g;
+    const otro = origen === 'CHAG' ? sg : sc;
+    const ref = b || o;
+    const rubro = b ? (RUBROS[b.linea] || RUBROS[o.linea] || 'OTROS') : NO_CODIFICADO;
+    if (b && ['SERV','MINER'].includes(b.linea)) continue;
+    filas.push({
+      barra, desc: ref.desc, rubro,
+      codB: b ? b.codigo : '—',
+      origen, codO: o.codigo, disp: o.stock, otro,
+      sug: Math.max(1, Math.ceil(o.stock * FRACCION_SUGERIDA))
+    });
+  }
+  filas.sort((a,b)=>a.rubro.localeCompare(b.rubro) || a.desc.localeCompare(b.desc));
+  document.getElementById('act').textContent =
+    Object.entries(datosAct).map(([k,v])=>SEDES[k].nombre+': '+v).join(' · ');
+  document.getElementById('carga').style.display='none';
+  document.getElementById('tabla').style.display='';
+  pintarRubros(); pintar();
+}
+
+function visibles(){
+  const q = document.getElementById('q').value.trim().toUpperCase();
+  const og = document.getElementById('origen').value;
+  return filas.filter(f =>
+    (!rubroSel || f.rubro === rubroSel) &&
+    (!og || f.origen === og) &&
+    (!q || (f.desc+' '+f.barra+' '+f.codB+' '+f.codO).toUpperCase().includes(q)));
+}
+
+function pintarRubros(){
+  const og = document.getElementById('origen').value;
+  const cnt = {};
+  filas.forEach(f=>{ if(!og || f.origen===og) cnt[f.rubro]=(cnt[f.rubro]||0)+1 });
+  const total = Object.values(cnt).reduce((a,b)=>a+b,0);
+  const orden = Object.keys(cnt).sort((a,b)=> (a===NO_CODIFICADO)-(b===NO_CODIFICADO) || cnt[b]-cnt[a]);
+  const el = document.getElementById('rubros');
+  el.innerHTML = `<span class="chip ${!rubroSel?'on':''}" data-r="">Todos <small>${total}</small></span>` +
+    orden.map(r=>`<span class="chip ${rubroSel===r?'on':''}" data-r="${r}">${r} <small>${cnt[r]}</small></span>`).join('');
+  el.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{ rubroSel=ch.dataset.r; pintarRubros(); pintar(); });
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])) }
+
+function estado(f){
+  const e = ediciones[f.barra] || {};
+  if (e.fisico === undefined || e.fisico === '') return '';
+  return Number(e.fisico) < Number(f.disp) ? 'nov' : 'ok';
+}
+
+function pintar(){
+  const v = visibles();
+  const LIM = 600;
+  document.getElementById('cuerpo').innerHTML = v.slice(0,LIM).map(f=>{
+    const e = ediciones[f.barra] || {};
+    const st = estado(f);
+    return `<tr class="${st}" data-b="${esc(f.barra)}">
+      <td>${esc(f.desc)} ${f.rubro===NO_CODIFICADO?'<span class="tag r">crear código</span>':''}</td>
+      <td class="cod">${esc(f.codB)}</td>
+      <td class="cod">${esc(f.barra)}</td>
+      <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.origen==='CHAG'?'GUAIRA':'CHAG'].nombre}: ${f.otro}</span>`:''}</td>
+      <td class="num">${f.disp}</td>
+      <td class="num"><input type="number" min="0" data-k="pedir" value="${e.pedir ?? f.sug}"></td>
+      <td class="num"><input type="number" min="0" data-k="fisico" value="${e.fisico ?? ''}" placeholder="—"></td>
+      <td>${st==='nov'?'<span class="tag r">novedad</span>':''}</td>
+    </tr>`;
+  }).join('') + (v.length>LIM ? `<tr><td colspan="8" style="text-align:center;color:#888">Mostrando ${LIM} de ${v.length}. Usa el buscador o elige un rubro.</td></tr>`:'');
+  document.querySelectorAll('#cuerpo input').forEach(inp=>inp.onchange=()=>{
+    const b = inp.closest('tr').dataset.b;
+    ediciones[b] = ediciones[b] || {};
+    ediciones[b][inp.dataset.k] = inp.value;
+    store.set('ed', ediciones);
+    const f = filas.find(x=>x.barra===b);
+    inp.closest('tr').className = estado(f);
+    inp.closest('tr').lastElementChild.innerHTML = estado(f)==='nov'?'<span class="tag r">novedad</span>':'';
+    resumen();
+  });
+  resumen();
+}
+
+function resumen(){
+  const v = visibles();
+  const nov = filas.filter(f=>estado(f)==='nov').length;
+  document.getElementById('resumen').textContent =
+    `${v.length} productos en vista · ${nov} novedades marcadas`;
+}
+
+function csv(nombre, cab, rows){
+  const txt = '﻿' + [cab, ...rows].map(r=>r.map(x=>{
+    x = String(x ?? ''); return /[;"\n]/.test(x) ? '"'+x.replace(/"/g,'""')+'"' : x;
+  }).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));
+  a.download = nombre; a.click();
+}
+function hoy(){ return new Date().toISOString().slice(0,10) }
+
+function exportPedido(){
+  const v = visibles();
+  const og = document.getElementById('origen').value;
+  const nombre = `pedido_Boleita_${og?SEDES[og].nombre:'todas'}_${(rubroSel||'todos').replace(/\s+/g,'_')}_${hoy()}.csv`;
+  csv(nombre,
+    ['Rubro','Sede origen','Código origen','Barra','Descripción','Disp. sistema','Cant. pedida','Cant. física','Código Boleíta'],
+    v.map(f=>{ const e=ediciones[f.barra]||{}; return [f.rubro,SEDES[f.origen].nombre,f.codO,f.barra,f.desc,f.disp,e.pedir??f.sug,e.fisico??'',f.codB]; }));
+}
+function exportNovedades(){
+  const n = filas.filter(f=>estado(f)==='nov');
+  if (!n.length) return alertaSuave('No hay novedades marcadas todavía.');
+  csv(`novedades_inventario_${hoy()}.csv`,
+    ['Sede','Código','Barra','Descripción','Sistema','Físico','Diferencia'],
+    n.map(f=>{ const fis=Number(ediciones[f.barra].fisico); return [SEDES[f.origen].nombre,f.codO,f.barra,f.desc,f.disp,fis,fis-f.disp]; }));
+}
+function limpiar(){
+  if (!document.getElementById('resumen').dataset.c){
+    document.getElementById('resumen').dataset.c='1';
+    return alertaSuave('Pulsa "Reiniciar" otra vez para borrar las cantidades cargadas.');
+  }
+  ediciones = {}; store.set('ed', ediciones); delete document.getElementById('resumen').dataset.c; pintar();
+}
+function alertaSuave(t){ const r=document.getElementById('resumen'); r.textContent=t; setTimeout(resumen,3500); }
+
+document.getElementById('q').oninput = pintar;
+document.getElementById('origen').onchange = ()=>{ pintarRubros(); pintar(); };
+cargar().catch(e=>{ document.getElementById('carga').textContent = '⚠ ' + e.message; });
+</script>
+</body>
+</html>
