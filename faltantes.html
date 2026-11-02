@@ -485,6 +485,8 @@ function pintarPedidos(){
     const origen=ors.map(o=>NOMBRE[o]||o).join(' y ');
     const cotTxt=ors.filter(o=>cot[o]).map(o=>`${esMia(p)&&ors.length>1?(NOMBRE[o]||o)+': ':''}Cotización <b>${esc(cot[o])}</b>${cpor[o]?' · '+esc(cpor[o]):''}`).join(' · ');
     const conCosto = p.items.some(i=>'costo' in i);
+    const verCodO = S.sede==='ADMIN' || !esMia(p);   // código de la sede que despacha: lo ve quien cotiza
+    const verCodD = S.sede==='ADMIN' || esMia(p);    // código de la sede que pide: lo ve quien pide
     const porCotizar0 = p.estado==='Anulado' ? [] : (S.sede==='ADMIN' ? ors.filter(o=>!cot[o]) : (!esMia(p) && !cot[S.sede] ? [S.sede] : []));
     const verAsig = i => porCotizar0.includes(i.origen) || cot[i.origen];   // hay cantidad asignada que mostrar
     const total = p.items.reduce((s,i)=>s+(i.costo===''||i.costo==null?0:i.costo*asignada(p,i)),0);
@@ -498,9 +500,9 @@ function pintarPedidos(){
       ${cotTxt?`<span class="resumen">${cotTxt}</span>`:''}
     </div>
     ${ab?`<div class="det">
-      <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th><th>Descripción</th><th>Cód. ${esc(NOMBRE[p.sede]||'')}</th><th class="num">Solicitada</th><th class="num">Asignada</th>${conCosto?'<th class="num">Últ. costo</th><th class="num">Subtotal</th>':''}</tr>
-      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}<td class="cod">${esc(i.cod_origen)}</td><td>${esc(i.descripcion)}</td><td class="cod">${esc(i.cod_sede)}</td><td class="num">${i.cantidad}</td><td class="num">${editable(p,i,porCotizar)?`<span class="step" data-as="${esc(p.numero)}|${i.n}"><button type="button" data-d="-1">−</button><input type="number" inputmode="numeric" min="0" value="${asignada(p,i)}"><button type="button" data-d="1">+</button></span>`:(verAsig(i)?`<b${asignada(p,i)<i.cantidad?' style="color:#c62828"':''}>${asignada(p,i)}</b>`:'<span class="resumen">—</span>')}</td>${conCosto?(i.costo===''?'<td class="num"><span class="tag r">sin costo</span></td><td class="num">—</td>':`<td class="num">${money(i.costo)}</td><td class="num" data-sub="${esc(p.numero)}|${i.n}">${money(i.costo*asignada(p,i))}</td>`):''}</tr>`).join('')}
-      ${conCosto?`<tr><td colspan="${ors.length>1?8:7}" class="num"><b>TOTAL A COSTO</b> <span class="resumen">(<span data-ua="${esc(p.numero)}">${uAsig}</span> und. asignadas)</span></td><td class="num"><b data-tot="${esc(p.numero)}">${money(total)}</b></td></tr>`:''}
+      <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}${verCodO?`<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th>`:''}<th>Descripción</th>${verCodD?`<th>Cód. ${esc(NOMBRE[p.sede]||'')}</th>`:''}<th class="num">Solicitada</th><th class="num">Asignada</th>${conCosto?'<th class="num">Costo</th><th class="num">Subtotal</th>':''}</tr>
+      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}${verCodO?`<td class="cod">${esc(i.cod_origen)}</td>`:''}<td>${esc(i.descripcion)}</td>${verCodD?`<td class="cod">${esc(i.cod_sede)}</td>`:''}<td class="num">${i.cantidad}</td><td class="num">${editable(p,i,porCotizar)?`<span class="step" data-as="${esc(p.numero)}|${i.n}"><button type="button" data-d="-1">−</button><input type="number" inputmode="numeric" min="0" value="${asignada(p,i)}"><button type="button" data-d="1">+</button></span>`:(verAsig(i)?`<b${asignada(p,i)<i.cantidad?' style="color:#c62828"':''}>${asignada(p,i)}</b>`:'<span class="resumen">—</span>')}</td>${conCosto?(i.costo===''?'<td class="num"><span class="tag r">sin costo</span></td><td class="num">—</td>':`<td class="num">${money(i.costo)}</td><td class="num" data-sub="${esc(p.numero)}|${i.n}">${money(i.costo*asignada(p,i))}</td>`):''}</tr>`).join('')}
+      ${conCosto?`<tr><td colspan="${5+(ors.length>1?1:0)+(verCodO?1:0)+(verCodD?1:0)}" class="num"><b>TOTAL A COSTO</b> <span class="resumen">(<span data-ua="${esc(p.numero)}">${uAsig}</span> und. asignadas)</span></td><td class="num"><b data-tot="${esc(p.numero)}">${money(total)}</b></td></tr>`:''}
       </table>
       <div class="acciones">
         <button class="wa" data-wa="${esc(p.numero)}">📲 Compartir</button>
