@@ -387,7 +387,7 @@ async function crearPDF(p, origen, conCot){
   if (nroCot){ d.text(`PEDIDO ${p.numero}`,W-12,10,{align:'right'}); d.setFontSize(16); d.text(`COTIZACIÓN ${nroCot}`,W-12,19,{align:'right'}); }
   else { d.text('PEDIDO ENTRE SEDES',W-12,11,{align:'right'}); d.setFontSize(16); d.text(p.numero,W-12,19,{align:'right'}); }
   d.setTextColor(30,30,30); d.setFontSize(10);
-  const info=[['Sede que pide:',sede],['Para:',para],['Solicitado por:',p.creado_por||''],['Fecha:',p.fecha||''],['Productos:',`${lst.length}  (${unidades} unidades solicitadas)`], ...(nroCot?[['Cotización:',`${nroCot}  (${uAsig} unidades asignadas)`]]:[])];
+  const info=[['Sede que pide:',sede],['Sede que despacha:',para],['Solicitado por:',p.creado_por||''],['Fecha:',p.fecha||''],['Productos:',`${lst.length}  (${unidades} unidades solicitadas)`], ...(nroCot?[['Cotización:',`${nroCot}  (${uAsig} unidades asignadas)`]]:[])];
   let y=33; info.forEach(([a,b])=>{ d.setFont('helvetica','bold'); d.text(a,12,y); d.setFont('helvetica','normal'); d.text(String(b),45,y); y+=6; });
   if (p.estado==='Anulado'){ d.setTextColor(198,40,40); d.setFont('helvetica','bold'); d.setFontSize(14); d.text('ANULADO',W-12,33,{align:'right'}); d.setTextColor(30,30,30); }
   d.autoTable({startY:y+2, margin:{left:12,right:12},
