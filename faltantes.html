@@ -138,7 +138,7 @@
       <select id="destino" title="Sede que pide"></select>
       <select id="origen"></select>
       <label style="font-size:13px;white-space:nowrap"><input type="checkbox" id="soloPed"> Ver solo lo que voy a pedir</label>
-      <input type="search" id="q" placeholder="Buscar descripción, código o barra…">
+      <input type="search" id="q" placeholder="Buscar descripción, código o barra (también lo que tienes poco)…">
     </div>
     <div class="fila">
       <button class="am" id="enviar">📤 Enviar pedido</button>
@@ -280,14 +280,14 @@ function calcular(){
   filas=[];
   for (const barra of new Set([...A.keys(), ...B2.keys()])){
     const d=D.get(barra);
-    if (d && d.stock>0) continue;
+    const tengo=d?d.stock:0;
     const a=A.get(barra), b=B2.get(barra), sa=a?a.stock:0, sb=b?b.stock:0;
     if (sa<=0 && sb<=0) continue;
     const origen=sa>=sb?k1:k2, o=origen===k1?a:b;
     if (d && ['SERV','MINER'].includes(d.linea)) continue;
     filas.push({ k:dest+'|'+barra, barra, desc:(d||o).desc,
       rubro: d?(RUBROS[d.linea]||RUBROS[o.linea]||'OTROS'):noCod(),
-      codB: d?d.codigo:'—', origen, otraSede:origen===k1?k2:k1, codO:o.codigo, uni:o.unidad||'', disp:o.stock, otro:origen===k1?sb:sa });
+      codB: d?d.codigo:'—', origen, otraSede:origen===k1?k2:k1, codO:o.codigo, uni:o.unidad||'', disp:o.stock, otro:origen===k1?sb:sa, tengo });
   }
   filas.sort((a,b)=>a.rubro.localeCompare(b.rubro) || a.desc.localeCompare(b.desc));
   pintarRubros(); pintar();
@@ -295,12 +295,12 @@ function calcular(){
 function cant(f){ return Number((ediciones[f.k]||{}).pedir||0) }
 function visibles(){
   const q=$('#q').value.trim().toUpperCase(), og=$('#origen').value, solo=$('#soloPed').checked;
-  return filas.filter(f=>(!rubroSel||f.rubro===rubroSel) && (!og||f.origen===og) && (!solo||cant(f)>0) &&
+  return filas.filter(f=>(f.tengo<=0 || q.length>=2 || cant(f)>0) && (!rubroSel||f.rubro===rubroSel) && (!og||f.origen===og) && (!solo||cant(f)>0) &&
     (!q || (f.desc+' '+f.barra+' '+f.codB+' '+f.codO).toUpperCase().includes(q)));
 }
 function pintarRubros(){
   const og=$('#origen').value, cnt={};
-  filas.forEach(f=>{ if(!og||f.origen===og) cnt[f.rubro]=(cnt[f.rubro]||0)+1 });
+  filas.forEach(f=>{ if(f.tengo<=0 && (!og||f.origen===og)) cnt[f.rubro]=(cnt[f.rubro]||0)+1 });
   const total=Object.values(cnt).reduce((a,b)=>a+b,0), NC=noCod();
   const orden=Object.keys(cnt).sort((a,b)=>(a===NC)-(b===NC) || cnt[b]-cnt[a]);
   $('#rubros').innerHTML=`<span class="chip ${!rubroSel?'on':''}" data-r="">Todos <small>${total}</small></span>`+
@@ -310,7 +310,7 @@ function pintarRubros(){
 function pintar(){
   const v=visibles(), LIM=600;
   $('#cuerpo').innerHTML=v.slice(0,LIM).map(f=>`<tr data-b="${esc(f.k)}" class="${cant(f)>0?'sel':''}">
-      <td>${esc(f.desc)} ${f.rubro===noCod()?'<span class="tag r">crear código</span>':''}</td>
+      <td>${esc(f.desc)} ${f.rubro===noCod()?'<span class="tag r">crear código</span>':''}${f.tengo>0?` <span class="tag">Aquí hay ${f.tengo}</span>`:''}</td>
       <td class="cod">${esc(f.codB)}</td><td class="cod">${esc(f.barra)}</td>
       <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.otraSede].nombre}: ${f.otro}</span>`:''}</td>
       <td class="num">${f.disp} <span class="uni">${esc(f.uni)}</span></td>
