@@ -22,7 +22,7 @@ const H_SOL = 'Solicitudes', H_DET = 'Solicitud_items';
 const COL_SOL = ['numero', 'fecha', 'sede', 'creado_por', 'origenes', 'productos', 'unidades', 'estado', 'nro_cotizacion', 'cotizado_por', 'actualizado', 'nota'];
 /* columnas que deben guardarse como texto (Sheets les quita los ceros a la izquierda o las vuelve fecha) */
 const TEXTO = new Set(['fecha', 'actualizado', 'nro_cotizacion', 'cod_origen', 'barra', 'cod_sede']);
-const COL_DET = ['numero', 'n', 'origen', 'cod_origen', 'barra', 'descripcion', 'rubro', 'cod_sede', 'disp_origen', 'cantidad'];
+const COL_DET = ['numero', 'n', 'origen', 'cod_origen', 'barra', 'descripcion', 'rubro', 'cod_sede', 'disp_origen', 'cantidad', 'asignada'];
 
 /* ---------- configuración inicial (opcional: las hojas también se crean solas) ---------- */
 function configurar() {
@@ -39,6 +39,10 @@ function asegurarHojas() {
     let h = ss.getSheetByName(n);
     if (!h) h = ss.insertSheet(n);
     if (h.getLastRow() === 0) { h.appendRow(cols); h.setFrozenRows(1); h.getRange(1, 1, 1, cols.length).setFontWeight('bold'); }
+    else {   // agrega columnas nuevas al encabezado si faltan (ej. 'asignada')
+      const cab = h.getRange(1, 1, 1, Math.max(h.getLastColumn(), 1)).getValues()[0];
+      cols.forEach((c, j) => { if (cab[j] !== c && !cab.includes(c)) h.getRange(1, j + 1).setValue(c).setFontWeight('bold'); });
+    }
   });
 }
 
@@ -156,6 +160,12 @@ function cotizar(sede, b) {
   por[origen] = String(b.por || '').slice(0, 40).replace(/[:,]/g, ' ');
   p.nro_cotizacion = texto(cot); p.cotizado_por = texto(por);
   p.estado = origenes.every(o => cot[o]) ? 'Cotizado' : 'Enviado';
+  // cantidades asignadas por quien cotiza (si no manda, queda igual a lo solicitado)
+  const asig = b.asignadas || {};
+  leer(H_DET).filter(it => it.numero === p.numero && it.origen === origen).forEach(it => {
+    it.asignada = asig[it.n] === undefined ? Number(it.cantidad) : Math.max(0, Math.floor(Number(asig[it.n]) || 0));
+    escribirFila(H_DET, COL_DET, it);
+  });
   p.actualizado = ahora();
   escribirFila(H_SOL, COL_SOL, p);
   return { ok: true, estado: p.estado };

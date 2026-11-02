@@ -473,6 +473,9 @@ function pendienteParaMi(p){
 function contador(){
   const n=PED.filter(pendienteParaMi).length, e=$('#nPed'); e.hidden=!n; e.textContent=n;
 }
+let asig={};   // numero|n -> cantidad asignada aún sin guardar
+function asignada(p,i){ const k=p.numero+'|'+i.n; if (k in asig) return asig[k]; return (i.asignada===''||i.asignada==null) ? Number(i.cantidad) : Number(i.asignada); }
+function editable(p,i,porCotizar){ return porCotizar.includes(i.origen); }
 function pintarPedidos(){
   const lista=PED.map(vista).filter(p=>p.items.length);
   if (!lista.length){ $('#pedidos').innerHTML='<div class="msg">Todavía no hay pedidos.</div>'; return; }
@@ -482,7 +485,10 @@ function pintarPedidos(){
     const origen=ors.map(o=>NOMBRE[o]||o).join(' y ');
     const cotTxt=ors.filter(o=>cot[o]).map(o=>`${esMia(p)&&ors.length>1?(NOMBRE[o]||o)+': ':''}Cotización <b>${esc(cot[o])}</b>${cpor[o]?' · '+esc(cpor[o]):''}`).join(' · ');
     const conCosto = p.items.some(i=>'costo' in i);
-    const total = p.items.reduce((s,i)=>s+(i.costo===''||i.costo==null?0:i.costo*i.cantidad),0);
+    const porCotizar0 = p.estado==='Anulado' ? [] : (S.sede==='ADMIN' ? ors.filter(o=>!cot[o]) : (!esMia(p) && !cot[S.sede] ? [S.sede] : []));
+    const verAsig = i => porCotizar0.includes(i.origen) || cot[i.origen];   // hay cantidad asignada que mostrar
+    const total = p.items.reduce((s,i)=>s+(i.costo===''||i.costo==null?0:i.costo*asignada(p,i)),0);
+    const uAsig = p.items.filter(verAsig).reduce((s,i)=>s+asignada(p,i),0);
     const porCotizar = p.estado==='Anulado' ? [] : (S.sede==='ADMIN' ? ors.filter(o=>!cot[o]) : (!esMia(p) && !cot[S.sede] ? [S.sede] : []));
     return `<div class="card"><div class="cab" data-n="${esc(p.numero)}">
       <span class="pnum">${esc(p.numero)}</span>
@@ -492,9 +498,9 @@ function pintarPedidos(){
       ${cotTxt?`<span class="resumen">${cotTxt}</span>`:''}
     </div>
     ${ab?`<div class="det">
-      <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th><th>Descripción</th><th>Cód. ${esc(NOMBRE[p.sede]||'')}</th><th class="num">Cant.</th>${conCosto?'<th class="num">Últ. costo</th><th class="num">Subtotal</th>':''}</tr>
-      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}<td class="cod">${esc(i.cod_origen)}</td><td>${esc(i.descripcion)}</td><td class="cod">${esc(i.cod_sede)}</td><td class="num"><b>${i.cantidad}</b></td>${conCosto?(i.costo===''?'<td class="num"><span class="tag r">sin costo</span></td><td class="num">—</td>':`<td class="num">${money(i.costo)}</td><td class="num">${money(i.costo*i.cantidad)}</td>`):''}</tr>`).join('')}
-      ${conCosto?`<tr><td colspan="${ors.length>1?7:6}" class="num"><b>TOTAL A COSTO</b></td><td class="num"><b>${money(total)}</b></td></tr>`:''}
+      <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th><th>Descripción</th><th>Cód. ${esc(NOMBRE[p.sede]||'')}</th><th class="num">Solicitada</th><th class="num">Asignada</th>${conCosto?'<th class="num">Últ. costo</th><th class="num">Subtotal</th>':''}</tr>
+      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}<td class="cod">${esc(i.cod_origen)}</td><td>${esc(i.descripcion)}</td><td class="cod">${esc(i.cod_sede)}</td><td class="num">${i.cantidad}</td><td class="num">${editable(p,i,porCotizar)?`<span class="step" data-as="${esc(p.numero)}|${i.n}"><button type="button" data-d="-1">−</button><input type="number" inputmode="numeric" min="0" value="${asignada(p,i)}"><button type="button" data-d="1">+</button></span>`:(verAsig(i)?`<b${asignada(p,i)<i.cantidad?' style="color:#c62828"':''}>${asignada(p,i)}</b>`:'<span class="resumen">—</span>')}</td>${conCosto?(i.costo===''?'<td class="num"><span class="tag r">sin costo</span></td><td class="num">—</td>':`<td class="num">${money(i.costo)}</td><td class="num" data-sub="${esc(p.numero)}|${i.n}">${money(i.costo*asignada(p,i))}</td>`):''}</tr>`).join('')}
+      ${conCosto?`<tr><td colspan="${ors.length>1?8:7}" class="num"><b>TOTAL A COSTO</b> <span class="resumen">(<span data-ua="${esc(p.numero)}">${uAsig}</span> und. asignadas)</span></td><td class="num"><b data-tot="${esc(p.numero)}">${money(total)}</b></td></tr>`:''}
       </table>
       <div class="acciones">
         <button class="wa" data-wa="${esc(p.numero)}">📲 Compartir</button>
@@ -510,13 +516,30 @@ function pintarPedidos(){
   document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>bajarPDF(por(b.dataset.pdf)));
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
     const p=por(b.dataset.copy), multi=new Set(p.items.map(i=>i.origen)).size>1;
-    const filas=p.items.map(i=>[...(multi?[NOMBRE[i.origen]||i.origen]:[]), i.cod_origen, i.descripcion, i.cantidad, i.costo===''?'':String(i.costo).replace('.',',')].join('\t'));
-    copiar(filas.join('\n')).then(()=>toast(`📋 Copiados ${p.items.length} productos: código, descripción, cantidad y costo`)).catch(()=>toast('No pude copiar; usa Ctrl+C sobre la tabla'));
+    const its=p.items.filter(i=>asignada(p,i)>0);
+    const filas=its.map(i=>[...(multi?[NOMBRE[i.origen]||i.origen]:[]), i.cod_origen, i.descripcion, asignada(p,i), i.costo===''?'':String(i.costo).replace('.',',')].join('\t'));
+    if (!its.length) return toast('Todas las cantidades asignadas están en 0.');
+    copiar(filas.join('\n')).then(()=>toast(`📋 Copiados ${its.length} productos con la cantidad asignada y su costo`)).catch(()=>toast('No pude copiar; usa Ctrl+C sobre la tabla'));
+  });
+  document.querySelectorAll('[data-as]').forEach(st=>{
+    const k=st.dataset.as, inp=st.querySelector('input');
+    const fijar=v=>{
+      v=Math.max(0, Math.floor(Number(v)||0)); inp.value=v; asig[k]=v;
+      const [num,n]=k.split('|'), p=vista(PED.find(x=>x.numero===num)), i=p.items.find(x=>String(x.n)===n);
+      const sub=document.querySelector(`[data-sub="${k}"]`); if (sub && i.costo!=='') sub.textContent=money(i.costo*v);
+      const tot=document.querySelector(`[data-tot="${num}"]`);
+      if (tot) tot.textContent=money(p.items.reduce((s,x)=>s+(x.costo===''||x.costo==null?0:x.costo*asignada(p,x)),0));
+      const ua=document.querySelector(`[data-ua="${num}"]`); if (ua) ua.textContent=p.items.filter(x=>document.querySelector(`[data-as="${num}|${x.n}"]`)||mapa(PED.find(y=>y.numero===num).nro_cotizacion)[x.origen]).reduce((s,x)=>s+asignada(p,x),0);
+    };
+    st.querySelectorAll('button').forEach(b=>b.onclick=e=>{ e.stopPropagation(); fijar((Number(inp.value)||0)+Number(b.dataset.d)); });
+    inp.onchange=()=>fijar(inp.value); inp.onfocus=()=>inp.select();
   });
   document.querySelectorAll('[data-cot]').forEach(b=>b.onclick=async()=>{
     const [num,o]=b.dataset.cot.split('|'), nro=document.querySelector(`[data-nc="${b.dataset.cot}"]`).value.trim();
     if (!nro) return toast('Escribe el número de cotización de Profit.');
-    b.disabled=true; try{ await api({accion:'cotizar', numero:num, origen:o, nro_cotizacion:nro}); toast('✅ Marcado como cotizado'); await refrescar(); }catch(e){ toast('⚠ '+e.message); b.disabled=false; }
+    const pp=vista(PED.find(x=>x.numero===num)), asignadas={};
+    pp.items.filter(i=>i.origen===o).forEach(i=>asignadas[i.n]=asignada(pp,i));
+    b.disabled=true; try{ await api({accion:'cotizar', numero:num, origen:o, nro_cotizacion:nro, asignadas}); pp.items.forEach(i=>delete asig[num+'|'+i.n]); toast('✅ Marcado como cotizado'); await refrescar(); }catch(e){ toast('⚠ '+e.message); b.disabled=false; }
   });
   document.querySelectorAll('[data-anular]').forEach(b=>b.onclick=async()=>{
     if (!b.dataset.c){ b.dataset.c='1'; b.textContent='¿Anular? toca otra vez'; return; }
