@@ -163,7 +163,7 @@
   <div class="resumen" id="mTxt"></div>
   <p class="resumen" style="margin:14px 0 4px">Ahora mándalo al grupo de WhatsApp <b>Pedidos</b>:</p>
   <div class="acciones">
-    <button class="wa" id="mWa">📲 Compartir</button>
+    <button class="wa" id="mWa">📲 Enviar por WhatsApp</button>
     <button id="mPdf">⬇ Descargar PDF</button>
   </div>
   <button class="gris" id="mCerrar" style="margin-top:12px;width:100%">Listo</button>
@@ -401,9 +401,20 @@ async function pdfsDe(p){
   const ors=[...new Set(p.items.map(i=>i.origen))];
   return Promise.all(ors.map(async o=>({o, nombre:nombrePDF(p,o), blob:await crearPDF(p,o)})));
 }
+const esPC = !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && matchMedia('(pointer:fine)').matches;
 async function compartir(p){
+  // En la computadora: baja los PDF y abre WhatsApp Web para arrastrarlos al grupo
+  let ventana=null;
+  if (esPC) ventana=window.open('', 'whatsapp_web');   // se abre en el clic para que el navegador no la bloquee
   try{
     const docs=await pdfsDe(p);
+    if (esPC){
+      docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400));
+      if (ventana){ ventana.location.href='https://web.whatsapp.com/'; }
+      else window.open('https://web.whatsapp.com/', 'whatsapp_web');
+      toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Arrástralo${docs.length>1?'s':''} al grupo Pedidos en WhatsApp Web.`, 7000);
+      return;
+    }
     const files=docs.map(x=>new File([x.blob], x.nombre, {type:'application/pdf'}));
     const texto=`Pedido ${p.numero} · ${NOMBRE[p.sede]||p.sede} · ${p.creado_por||''} → `+docs.map(x=>NOMBRE[x.o]||x.o).join(' y ');
     if (navigator.canShare && navigator.canShare({files})){
@@ -412,7 +423,7 @@ async function compartir(p){
     }
     docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400));
     toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Adjúntalo${docs.length>1?'s':''} en el grupo Pedidos de WhatsApp.`, 5000);
-  }catch(e){ toast('⚠ '+e.message, 5000); }
+  }catch(e){ if (ventana) ventana.close(); toast('⚠ '+e.message, 5000); }
 }
 async function bajarPDF(p){
   try{ const docs=await pdfsDe(p); docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400)); }
