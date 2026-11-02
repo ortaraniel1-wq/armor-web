@@ -115,6 +115,9 @@
   .drop{background:var(--panel);border:1px solid var(--edge);border-radius:18px;padding:.9rem;margin-bottom:.9rem}
   .card.listo{border-color:#6b6610;background:linear-gradient(180deg,#2a2a14,var(--panel))}
   .card.listo .k{font-family:var(--display);font-size:.85rem;letter-spacing:.14em;text-transform:uppercase;color:var(--y);margin:0 0 .5rem}
+  .verif{border-radius:12px;padding:.6rem .8rem;margin:0 0 .8rem;font-size:.9rem;line-height:1.35}
+  .verif.ok{background:var(--ok-bg);color:#bfeccb;border:1px solid #1f5a30}
+  .verif.mal{background:var(--stop-bg);color:#ffd0c8;border:1px solid #7a2a20}
   .resumen-carga{font-family:var(--display);font-weight:700;font-size:1.6rem;margin:.2rem 0 .8rem;line-height:1.1}
   .card.revisar{padding:.7rem 1rem}
   .card.revisar[open]{padding-bottom:1rem}
@@ -370,6 +373,7 @@
       <p class="k">Factura cargada</p>
       <input type="text" id="docNum" placeholder="N° de factura o nota" style="font-family:var(--sans)">
       <p class="resumen-carga" id="rowCount"></p>
+      <div class="verif" id="alertaCarga" hidden></div>
       <button class="btn primary grande" id="btnEmpezar">Empezar chequeo</button>
     </div>
     <details class="card revisar">
@@ -936,11 +940,13 @@ function prepararImagen(file){
 /* Formato de Profit (nota de entrega / factura impresa a PDF):
      CODIGO  DESCRIPCION  UND  [GRTIA]  CANTD  ALM  PRECIO  [%DESC]  NETO
    La descripción puede seguir en la línea de abajo y cada página repite el encabezado. */
+const numUS = t => { const n = parseFloat(String(t).replace(/,/g, "")); return isNaN(n) ? 0 : n; };   // "1,467.88" -> 1467.88
 function parsearProfit(texto){
   const out = [];
-  const reRenglon = /^(\S+)\s+(.+?)\s+(\S{2,6})(?:\s+\d+(?:[.,]\d+)?)?\s+(\d+(?:[.,]\d+)?)\s+([A-Za-z0-9]{2,8})\s+[\d.,]+(?:\s+[\d.,]+)?\s+[\d.,]+$/;
-  const reSalta = /^(nota\s+de\s+(entrega|despacho)|factura\b|cliente|r\.?\s?i\.?\s?f|n\.?\s?i\.?\s?t|direcci|tel[eé]fonos|fecha|condici|vendedor|codigo\s+descripci|sub-?\s*total|descuento|total\b|son:|p[aá]gina|p[aá]g\b)/i;
-  let ultima = null, almacenOrigen = "";
+  // CODIGO [BARRA] DESCRIPCION [UND] [GRTIA] CANTD ALM PRECIO [%DESC] NETO   (UND y GRTIA pueden no venir)
+  const reRenglon = /^(\S+)\s+(.+?)(?:\s+(?:UND|CAJA|PAQ|DOC|PAR|0\d{1,3}))?(?:\s+(?:S\/G|\d{1,3}[DMA]))?\s+(\d+(?:[.,]\d+)?)\s+([A-Za-z0-9]{2,8})\s+[\d.,]+(?:\s+[\d.,]+)?\s+([\d.,]+)$/i;
+  const reSalta = /^(nota\s+de\s+(entrega|despacho)|factura\b|cliente|r\.?\s?i\.?\s?f|n\.?\s?i\.?\s?t|direcci|tel[eé]fonos|fecha|condici|vendedor|codigo\s+(barra\s+)?descripci|sub-?\s*total|descuento|total\b|son:|p[aá]gina|p[aá]g\b|transferencia|efectivo|zelle|pago|divisa|punto\s+de|d[eé]bito|cr[eé]dito|cheque|ventas\s+al|observaci)/i;
+  let ultima = null, almacenOrigen = "", suma = 0;
   const mDoc = String(texto).match(/(?:nota\s+de\s+(?:entrega|despacho)|factura)\s*(?:no\.?|n[º°o]\.?)?\s*:?\s*(\d{4,})/i);
 
   String(texto).split(/\r?\n/).forEach(linea=>{
@@ -948,12 +954,13 @@ function parsearProfit(texto){
     if(!l) return;
     const m = l.match(reRenglon);
     if(m){
-      if(!almacenOrigen) almacenOrigen = m[5].toUpperCase();
+      if(!almacenOrigen) almacenOrigen = m[4].toUpperCase();
+      suma += numUS(m[5]);
       // algunas facturas traen el código de barras entre el código y la descripción
       let desc = m[2], bar = "";
       const mb = desc.match(/^(\d{8,14})\s+(.+)$/);
       if(mb){ bar = mb[1]; desc = mb[2]; }
-      ultima = { id: uid++, code: m[1], bar: bar, barras: bar ? [bar] : [], desc: desc, qty: Math.max(1, Math.round(numVe(m[4]) || 1)), got: 0 };
+      ultima = { id: uid++, code: m[1], bar: bar, barras: bar ? [bar] : [], desc: desc, qty: Math.max(1, Math.round(numVe(m[3]) || 1)), got: 0 };
       out.push(ultima);
     } else if(reSalta.test(l)){
       ultima = null;
@@ -964,15 +971,20 @@ function parsearProfit(texto){
 
   if(out.length){
     const mCli = String(texto).match(/^\s*CLIENTE:\s*\S+\s+(.+?)\s*$/im);
-    const et = mDoc ? mDoc[0].toLowerCase() : "";
-    docInfo = { destino: mCli ? limpiar(mCli[1]) : "", almacen: almacenOrigen,
-                tipo: /factura/.test(et) ? "factura" : /despacho/.test(et) ? "despacho" : /entrega/.test(et) ? "entrega" : "" };
+    // control: los renglones deben sumar el SUB-TOTAL impreso (tolera el redondeo por línea)
+    const subs = [...String(texto).matchAll(/sub-?\s*total\s*:?\s*([\d.,]+)/ig)];
+    let verif = null;
+    if(subs.length){
+      const sub = numUS(subs[subs.length-1][1]);
+      verif = { suma: Math.round(suma*100)/100, sub: sub, ok: Math.abs(suma - sub) <= Math.max(0.5, sub*0.001) };
+    }
+    docInfo = { destino: mCli ? limpiar(mCli[1]) : "", almacen: almacenOrigen, tipo: "factura", verif: verif };
   }
   if(out.length && mDoc){
     doc = mDoc[1];
     $("docNum").value = doc;
     $("docLabel").textContent = doc;
-    $("ctxTipo").textContent = tipoDoc().corto === "Documento" ? "Documento" : tipoDoc().largo.replace(" nro.","");
+    $("ctxTipo").textContent = "Factura";
   }
   return out;
 }
@@ -1016,6 +1028,15 @@ function mostrarCargada(){
   pintarTabla();
   setTimeout(()=>$("tableBox").scrollIntoView({ behavior:"smooth", block:"start" }), 60);
 }
+function pintarVerif(){
+  const v = docInfo && docInfo.verif, el = $("alertaCarga");
+  if(!v || v.editado){ el.hidden = true; return; }
+  const f = n => n.toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+  el.hidden = false; el.className = "verif " + (v.ok ? "ok" : "mal");
+  el.textContent = v.ok
+    ? "Los renglones coinciden con el total del documento (" + f(v.sub) + ")."
+    : "Atención: los renglones suman " + f(v.suma) + " y el documento dice " + f(v.sub) + ". Puede faltar un renglón o haberse leído mal: revisa la lista antes de empezar.";
+}
 function pintarTabla(){
   $("tableBox").hidden = false;
   const tb = $("tbody");
@@ -1031,11 +1052,13 @@ function pintarTabla(){
       inp.oninput = ()=>{
         const f = inp.dataset.f;
         r[f] = f==="qty" ? Math.max(1, parseInt(inp.value)||1) : inp.value;
+        if(docInfo.verif){ docInfo.verif.editado = true; $("alertaCarga").hidden = true; }
         guardarSesion();
       };
     });
     tr.querySelector("button").onclick = ()=>{
       rows = rows.filter(x=>x.id!==r.id);
+      if(docInfo.verif) docInfo.verif.editado = true;
       pintarTabla(); guardarSesion();
     };
     tb.appendChild(tr);
@@ -1044,11 +1067,12 @@ function pintarTabla(){
   $("rowCount").textContent = rows.length + (rows.length === 1 ? " renglón" : " renglones") + " · " + piezas + (piezas === 1 ? " pieza" : " piezas");
   $("tab2").disabled = rows.length === 0;
   $("tab3").disabled = rows.length === 0;
+  pintarVerif();
   guardarSesion();
 }
 function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 
-$("btnAddRow").onclick = ()=>{ rows.push({id:uid++,code:"",bar:"",desc:"",qty:1,got:0}); pintarTabla(); };
+$("btnAddRow").onclick = ()=>{ if(docInfo.verif) docInfo.verif.editado = true; rows.push({id:uid++,code:"",bar:"",desc:"",qty:1,got:0}); pintarTabla(); };
 $("btnBorrarTodo").onclick = ()=>{
   if(!confirm("¿Descartar esta factura y empezar de cero?")) return;
   rows = []; unknown = {}; doc = ""; docInfo = {};
@@ -1357,19 +1381,24 @@ function sedeDeTexto(t){                       // "ARMOR MARKET BOLEITA" -> "Bol
   t = String(t || "").toUpperCase();
   return /BOLE/.test(t) ? "Boleíta" : /CHAGUA/.test(t) ? "Chaguaramos" : /GUAIRA|MACUT/.test(t) ? "La Guaira" : "";
 }
-function tipoDoc(){
-  const t = docInfo.tipo;
-  if(t === "factura") return { largo:"Factura nro.", corto:"Factura", palabra:"la factura" };
-  if(t === "despacho") return { largo:"Nota de despacho nro.", corto:"Nota", palabra:"la nota" };
-  if(t === "entrega") return { largo:"Nota de entrega nro.", corto:"Nota", palabra:"la nota" };
-  return { largo:"Documento nro.", corto:"Documento", palabra:"el documento" };
+function tipoDoc(){                           // en Armor Market a estos documentos se les dice "factura"
+  return { largo:"Factura nro.", corto:"Factura", palabra:"la factura" };
 }
-function enviaKey(){                           // quién envía: lo que se eligió, o lo que dice el almacén del documento
-  return docInfo.envia || ALMACEN_KEY[docInfo.almacen] || "";
+function sedeRecibeKey(){
+  const ses = window.chqSesion;
+  return ses && ["BOLEITA","CHAG","GUAIRA"].includes(ses.sede) ? ses.sede : "";
+}
+function enviaKey(){                           // lo elegido, o el almacén del documento si es otra sede distinta a la que recibe
+  const k = docInfo.envia || ALMACEN_KEY[docInfo.almacen] || "";
+  return k && k === sedeRecibeKey() ? "" : k;
 }
 function pintarEnvia(){
   const ek = enviaKey();
-  document.querySelectorAll("#enviaChips button").forEach(b => b.classList.toggle("on", b.dataset.s === ek));
+  const rk = sedeRecibeKey();
+  document.querySelectorAll("#enviaChips button").forEach(b => {
+    b.hidden = b.dataset.s === rk;                 // la sede que recibe no puede ser quien envía
+    b.classList.toggle("on", b.dataset.s === ek);
+  });
   $("enviaChips").classList.toggle("falta", !ek);
 }
 document.querySelectorAll("#enviaChips button").forEach(b => b.onclick = ()=>{
