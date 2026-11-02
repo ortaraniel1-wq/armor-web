@@ -453,7 +453,7 @@ let PED=[], abiertos=new Set(), vigilando=null;
 function enCola(){ return PED.some(p=>Object.values(p.cola||{}).some(c=>c.estado==='Pendiente'||c.estado==='Procesando')); }
 function vigilar(){ if (vigilando) return; vigilando=setInterval(async()=>{ await refrescar(); if (!enCola()){ clearInterval(vigilando); vigilando=null; } }, 10000); }
 async function refrescar(){
-  try{ const j=await api({accion:'listar'}); PED=j.pedidos||[]; contador(); if(tab==='pedidos' && !document.activeElement?.closest?.('#pedidos .det')) pintarPedidos(); if (enCola()) vigilar(); }
+  try{ const j=await api({accion:'listar'}); PED=j.pedidos||[]; contador(); if(tab==='pedidos' && !document.activeElement?.matches?.('#pedidos input')) pintarPedidos(); if (enCola()) vigilar(); }
   catch(err){ if (/PIN/.test(err.message)){ store.set('ses',null); location.reload(); } }
 }
 function esMia(p){ return S.sede==='ADMIN' || p.sede===S.sede }
