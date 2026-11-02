@@ -3,156 +3,268 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1B2127">
+<meta name="theme-color" content="#16171A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Chequeo">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>Chequeo de facturas — Armor Market</title>
 <link rel="manifest" href="manifest.json">
 <meta name="robots" content="noindex,nofollow">
 <script src="../faltantes-config.js" onerror="void 0"></script>
 <style>
+  @font-face{font-family:"BC";src:url(../fonts/f1.woff2) format("woff2");font-weight:700;font-display:swap}
+  @font-face{font-family:"BC";src:url(../fonts/f2.woff2) format("woff2");font-weight:600;font-display:swap}
+  @font-face{font-family:"BA";src:url(../fonts/f3.woff2) format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"BA";src:url(../fonts/f4.woff2) format("woff2");font-weight:600;font-display:swap}
+
   :root{
-    --ink:#1B2127;
-    --panel:#252D35;
-    --panel-2:#2E3840;
-    --edge:#3E4A55;
-    --paper:#EDEFF1;
-    --dim:#96A3AE;
-    --ok:#3FA34D;
-    --alert:#E8A317;
-    --stop:#D8452F;
-    --mono:"IBM Plex Mono",ui-monospace,"Roboto Mono","Courier New",monospace;
-    --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --ink:#16171A; --ink-2:#0E0F11; --panel:#202226; --panel-2:#2A2D32; --edge:#383C43;
+    --paper:#F3F2EE; --dim:#A3A39B; --y:#FDF500;
+    --ok:#35C463; --ok-bg:#12301B; --warn-bg:#35320A; --stop:#FF5A44; --stop-bg:#3A1612;
+    --alert:var(--y);
+    --display:"BC","Barlow Condensed","Arial Narrow",Impact,sans-serif;
+    --sans:"BA","Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono","Roboto Mono","Courier New",monospace;
+    --nav-h:62px;
   }
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
   body{
     background:var(--ink);color:var(--paper);font-family:var(--sans);
-    font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%;
-    padding-bottom:env(safe-area-inset-bottom);
+    font-size:17px;line-height:1.4;-webkit-text-size-adjust:100%;
   }
   button{font-family:inherit;font-size:1rem}
-  :focus-visible{outline:3px solid var(--alert);outline-offset:2px}
-
-  /* clave de acceso (solo cuando la app está publicada en la web) */
-  body.chq-bloqueado header, body.chq-bloqueado nav, body.chq-bloqueado main{display:none}
-  #chqLogin{max-width:420px;margin:10vh auto 0;padding:1.2rem}
-  #chqLogin[hidden]{display:none}
-  #chqLogin h2{margin:0 0 .2rem;font-size:1.3rem}
-  .chq-sedes{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:.9rem 0}
-  .chq-sedes button{padding:.8rem .4rem;background:var(--panel-2);color:var(--paper);border:1px solid var(--edge);border-radius:6px}
-  .chq-sedes button.on{background:var(--alert);color:#1B2127;border-color:var(--alert);font-weight:700}
-  #chqErr{color:#ff8a78;min-height:1.4em;font-size:.9rem;margin-top:.5rem}
+  svg.i{width:1.25em;height:1.25em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  :focus-visible{outline:3px solid var(--y);outline-offset:2px}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-  header{
-    display:flex;align-items:center;justify-content:space-between;gap:.5rem;
-    padding:.7rem .9rem;background:var(--panel);border-bottom:1px solid var(--edge);
-    position:sticky;top:0;z-index:20;
-  }
-  header h1{margin:0;font-size:1rem;font-weight:600;letter-spacing:.01em}
-  header .doc{font-family:var(--mono);font-size:.78rem;color:var(--dim)}
+  /* ---- clave de acceso (solo en la versión web) ---- */
+  body.chq-bloqueado .appbar, body.chq-bloqueado .ctx, body.chq-bloqueado .tabbar, body.chq-bloqueado main{display:none}
+  #chqLogin{max-width:420px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 8vh) 1.2rem 2rem}
+  #chqLogin[hidden]{display:none}
+  #chqLogin .logo{display:block;width:210px;max-width:70%;margin:0 auto 1.4rem}
+  #chqLogin h2{margin:0 0 .2rem;font-family:var(--display);font-size:1.9rem;text-transform:uppercase;letter-spacing:.01em;text-align:center}
+  #chqLogin p.note{text-align:center}
+  .chq-sedes{display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin:1rem 0}
+  .chq-sedes button{padding:.95rem .4rem;background:var(--panel);color:var(--paper);border:2px solid var(--edge);border-radius:14px;font-weight:600}
+  .chq-sedes button.on{background:var(--y);color:var(--ink);border-color:var(--y)}
+  #chqErr{color:#ff8a78;min-height:1.4em;font-size:.95rem;margin-top:.6rem;text-align:center}
 
-  nav{display:flex;background:var(--panel-2);border-bottom:1px solid var(--edge);position:sticky;top:49px;z-index:19}
-  nav button{
-    flex:1;background:none;border:0;color:var(--dim);padding:.65rem .3rem;
-    font-weight:500;border-bottom:3px solid transparent;cursor:pointer;
+  /* ---- barra superior ---- */
+  .appbar{
+    position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:.6rem;
+    padding:calc(env(safe-area-inset-top) + .55rem) .9rem .55rem;background:var(--ink-2);border-bottom:3px solid var(--y);
   }
-  nav button[aria-current="true"]{color:var(--paper);border-bottom-color:var(--alert)}
-  nav button:disabled{opacity:.35}
+  .appbar img{height:30px;width:auto;display:block}
+  .who{display:flex;align-items:center;gap:.5rem}
+  .who[hidden]{display:none}
+  .avatar{width:32px;height:32px;border-radius:50%;background:var(--y);color:var(--ink);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:1.1rem}
+  #chqSalir{
+    display:inline-flex;align-items:center;gap:.35rem;background:var(--panel);color:var(--paper);border:1px solid var(--edge);
+    border-radius:999px;padding:.35rem .75rem;font-size:.82rem;font-weight:600;cursor:pointer;
+  }
+  #chqSalir[hidden]{display:none}
 
-  main{padding:.9rem}
+  .ctx{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;padding:.55rem .95rem;background:var(--ink);border-bottom:1px solid var(--edge)}
+  .ctx .k{font-family:var(--display);font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .ctx .doc{font-family:var(--display);font-weight:700;font-size:1.15rem;color:var(--y);text-align:right;overflow-wrap:anywhere}
+
+  /* ---- barra inferior ---- */
+  .tabbar{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;background:var(--ink-2);
+    border-top:1px solid var(--edge);padding-bottom:env(safe-area-inset-bottom);
+  }
+  .tabbar button{
+    flex:1;height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;
+    background:none;border:0;color:var(--dim);font-size:.78rem;font-weight:600;letter-spacing:.02em;cursor:pointer;position:relative;
+  }
+  .tabbar button svg.i{width:1.6em;height:1.6em}
+  .tabbar button[aria-current="true"]{color:var(--y)}
+  .tabbar button[aria-current="true"]::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--y)}
+  .tabbar button:disabled{opacity:.3}
+
+  main{max-width:640px;margin:0 auto;padding:1rem .95rem calc(var(--nav-h) + env(safe-area-inset-bottom) + 1.4rem)}
   section[hidden]{display:none}
-  h2{font-size:1.05rem;margin:0 0 .3rem}
-  p.note{color:var(--dim);font-size:.88rem;margin:.2rem 0 1rem;max-width:60ch}
+  section{animation:entra .22s ease-out}
+  @keyframes entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  h2{font-family:var(--display);font-size:1.5rem;letter-spacing:.01em;margin:0 0 .3rem;text-transform:uppercase}
+  p.note{color:var(--dim);font-size:.92rem;margin:.2rem 0 1rem;max-width:60ch}
+  code{font-family:var(--mono);font-size:.85em;background:var(--panel);padding:.05rem .3rem;border-radius:4px}
 
+  /* ---- botones ---- */
   .btn{
-    display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
+    display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:48px;
     background:var(--panel-2);color:var(--paper);border:1px solid var(--edge);
-    border-radius:6px;padding:.8rem 1rem;font-weight:600;cursor:pointer;width:100%;
+    border-radius:14px;padding:.75rem 1rem;font-weight:600;cursor:pointer;width:100%;
+    transition:transform .08s,background .15s;
   }
-  .btn:active{background:var(--edge)}
-  .btn.primary{background:var(--alert);color:#20170A;border-color:var(--alert)}
-  .btn.go{background:var(--ok);color:#06210B;border-color:var(--ok)}
+  .btn:active{transform:scale(.98);background:var(--edge)}
+  .btn.primary{background:var(--y);color:var(--ink);border-color:var(--y)}
+  .btn.primary:active{background:#d8d100}
+  .btn.go{background:var(--ok);color:#04210D;border-color:var(--ok)}
   .btn.ghost{background:none}
-  .btn.sm{padding:.5rem .7rem;font-size:.85rem;width:auto}
+  .btn.sm{min-height:38px;padding:.45rem .8rem;font-size:.88rem;width:auto;border-radius:10px}
   .btn:disabled{opacity:.4;cursor:not-allowed}
-  .row{display:flex;gap:.55rem;margin-bottom:.55rem}
+  .btn.grande{min-height:64px;font-family:var(--display);font-size:1.5rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin-bottom:.2rem}
+  .row{display:flex;gap:.6rem;margin-bottom:.6rem}
   .row>*{flex:1}
 
-  .drop{
-    border:2px dashed var(--edge);border-radius:8px;padding:1.2rem;text-align:center;
-    color:var(--dim);margin-bottom:.9rem;
+  .card{background:var(--panel);border:1px solid var(--edge);border-radius:18px;padding:1rem;margin-bottom:.9rem}
+  .drop{background:var(--panel);border:1px solid var(--edge);border-radius:18px;padding:.9rem;margin-bottom:.9rem}
+  .card.listo{border-color:#6b6610;background:linear-gradient(180deg,#2a2a14,var(--panel))}
+  .card.listo .k{font-family:var(--display);font-size:.85rem;letter-spacing:.14em;text-transform:uppercase;color:var(--y);margin:0 0 .5rem}
+  .resumen-carga{font-family:var(--display);font-weight:700;font-size:1.6rem;margin:.2rem 0 .8rem;line-height:1.1}
+  .card.revisar{padding:.7rem 1rem}
+  .card.revisar[open]{padding-bottom:1rem}
+  #tableBox{scroll-margin-top:7.5rem}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:.6rem 0}
+  .tile{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;min-height:86px;
+    background:var(--panel-2);color:var(--paper);border:1px solid var(--edge);border-radius:14px;font-weight:600;cursor:pointer;
   }
+  .tile svg.i{width:1.8em;height:1.8em;color:var(--y)}
+  .tile:active{transform:scale(.98)}
+
   textarea,input[type=text],input[type=number],input[type=search],input[type=password]{
-    width:100%;background:var(--panel);color:var(--paper);border:1px solid var(--edge);
-    border-radius:6px;padding:.6rem;font-family:var(--mono);font-size:.95rem;
+    width:100%;background:var(--ink-2);color:var(--paper);border:1px solid var(--edge);
+    border-radius:12px;padding:.75rem .85rem;font-family:var(--mono);font-size:1rem;min-height:48px;margin-bottom:.5rem;
   }
   textarea{min-height:130px;line-height:1.35}
+  input::placeholder,textarea::placeholder{color:#7d7d77}
+  input:focus,textarea:focus{border-color:var(--y);outline:none}
+  td input{margin-bottom:0}
 
-  .bar{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;margin:.7rem 0}
-  .bar i{display:block;height:100%;background:var(--alert);width:0;transition:width .2s}
+  details>summary{cursor:pointer;list-style:none}
+  details>summary::-webkit-details-marker{display:none}
+  summary#catResumen{
+    display:flex;align-items:center;gap:.55rem;background:var(--panel);border:1px solid var(--edge);border-radius:999px;
+    padding:.5rem .9rem;font-size:.85rem;color:var(--paper);margin:0;
+  }
+  summary#catResumen::before{content:"";width:.6rem;height:.6rem;border-radius:50%;background:#7d7d77;flex:none}
+  summary#catResumen[data-ok="1"]::before{background:var(--ok);box-shadow:0 0 0 3px rgba(53,196,99,.25)}
+  details[open]>summary#catResumen{margin-bottom:.8rem}
+  summary.link{color:var(--dim);font-size:.88rem;padding:.4rem 0}
+
+  .aviso{display:flex;align-items:center;gap:.7rem;background:var(--warn-bg);border:1px solid #6b6610;border-radius:14px;padding:.7rem .9rem;margin-bottom:.9rem;font-size:.9rem}
+  .aviso[hidden]{display:none}
+  .aviso button{flex:none}
+
+  .bar{height:8px;background:var(--panel-2);border-radius:4px;overflow:hidden;margin:.7rem 0}
+  .bar i{display:block;height:100%;background:var(--y);width:0;transition:width .2s}
   .status{font-family:var(--mono);font-size:.82rem;color:var(--dim);min-height:1.2em}
 
+  .hero-load{display:flex;align-items:center;gap:.9rem;margin-bottom:1rem}
+  .hero-load img{width:68px;height:68px;flex:none}
+  .hero-load .k{font-family:var(--display);font-size:.85rem;letter-spacing:.14em;text-transform:uppercase;color:var(--y);margin:0}
+  .hero-load h2{margin:0;font-size:1.75rem;line-height:1.05}
+  .hero-load .hola{margin:.2rem 0 0;color:var(--dim);font-size:.92rem}
+
   table{width:100%;border-collapse:collapse;font-size:.85rem}
-  th{text-align:left;color:var(--dim);font-weight:500;font-size:.75rem;padding:.35rem .3rem;border-bottom:1px solid var(--edge)}
+  th{text-align:left;color:var(--dim);font-weight:600;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:.4rem .3rem;border-bottom:1px solid var(--edge)}
   td{padding:.3rem;border-bottom:1px solid var(--panel-2);vertical-align:top}
-  td input{padding:.35rem;font-size:.82rem}
+  td input{padding:.4rem;font-size:.82rem;min-height:40px}
   td.qty{width:64px}
   td.code{width:96px}
   td.del{width:34px}
-  .icon-btn{background:none;border:0;color:var(--dim);font-size:1.1rem;cursor:pointer;padding:.2rem .35rem}
+  .icon-btn{background:none;border:0;color:var(--dim);font-size:1.1rem;cursor:pointer;padding:.3rem .4rem}
 
   /* ---- pantalla de chequeo ---- */
+  .progress{background:var(--panel);border:1px solid var(--edge);border-radius:18px;padding:.9rem 1rem;margin-bottom:.8rem}
+  .progress .top{display:flex;align-items:baseline;justify-content:space-between}
+  .progress .k{font-family:var(--display);font-size:.85rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .progress .pct{font-family:var(--display);font-weight:700;font-size:2.4rem;line-height:1;color:var(--y)}
+  .progress .meter{height:12px;background:var(--ink-2);border-radius:6px;overflow:hidden;margin:.55rem 0 .45rem}
+  .progress .meter i{display:block;height:100%;width:0;background:var(--y);border-radius:6px;transition:width .35s ease}
+  .progress .meter i.full{background:var(--ok)}
+  .progress .sub{display:flex;justify-content:space-between;font-size:.85rem;color:var(--dim)}
+
   .signal{
-    border-radius:8px;padding:1rem;margin-bottom:.8rem;background:var(--panel);
-    border-left:6px solid var(--edge);min-height:104px;
+    border-radius:18px;padding:1rem 1.1rem;margin-bottom:.8rem;background:var(--panel);
+    border:1px solid var(--edge);border-left:8px solid var(--edge);min-height:104px;
   }
-  .signal.ok{background:#1E3A23;border-left-color:var(--ok)}
-  .signal.dup{background:#3B3117;border-left-color:var(--alert)}
-  .signal.bad{background:#3B1E18;border-left-color:var(--stop)}
-  .signal .verdict{font-size:1.25rem;font-weight:700;margin:0 0 .15rem}
-  .signal .what{font-size:.92rem;margin:0;color:#DDE3E8}
-  .signal .count{font-family:var(--mono);font-size:1.6rem;font-weight:600;margin-top:.3rem}
+  .signal.ok{background:var(--ok-bg);border-color:#1f5a30;border-left-color:var(--ok)}
+  .signal.dup{background:var(--warn-bg);border-color:#6b6610;border-left-color:var(--y)}
+  .signal.bad{background:var(--stop-bg);border-color:#7a2a20;border-left-color:var(--stop)}
+  .signal .verdict{font-family:var(--display);font-size:1.7rem;font-weight:700;margin:0 0 .1rem;text-transform:uppercase;letter-spacing:.01em;line-height:1.1}
+  .signal .what{font-size:.95rem;margin:0;color:#E4E4DE}
+  .signal .count{font-family:var(--display);font-size:2rem;font-weight:700;margin-top:.2rem}
 
-  .tally{display:flex;gap:.5rem;margin-bottom:.8rem}
-  .tally div{flex:1;background:var(--panel);border:1px solid var(--edge);border-radius:6px;padding:.5rem;text-align:center}
-  .tally b{display:block;font-family:var(--mono);font-size:1.3rem;line-height:1.1}
-  .tally span{font-size:.7rem;color:var(--dim)}
+  .tally{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-bottom:.8rem}
+  .tally div{background:var(--panel);border:1px solid var(--edge);border-top:4px solid var(--edge);border-radius:14px;padding:.55rem .3rem;text-align:center}
+  .tally div:nth-child(1){border-top-color:var(--ok)} .tally div:nth-child(1) b{color:var(--ok)}
+  .tally div:nth-child(2){border-top-color:var(--y)}  .tally div:nth-child(2) b{color:var(--y)}
+  .tally div:nth-child(3){border-top-color:var(--stop)} .tally div:nth-child(3) b{color:var(--stop)}
+  .tally b{display:block;font-family:var(--display);font-size:1.9rem;line-height:1.05}
+  .tally span{font-size:.72rem;color:var(--dim);letter-spacing:.04em;text-transform:uppercase}
 
-  .toggle{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--dim);margin:.2rem 0 .8rem}
-  .toggle input{width:1.15rem;height:1.15rem;accent-color:var(--alert)}
+  .toggle{display:flex;align-items:center;gap:.7rem;font-size:.9rem;color:var(--dim);margin:.2rem 0 .8rem;cursor:pointer}
+  .toggle input{appearance:none;-webkit-appearance:none;flex:none;width:46px;height:28px;border-radius:14px;background:var(--panel-2);border:1px solid var(--edge);position:relative;transition:background .15s;margin:0;padding:0;min-height:0}
+  .toggle input::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--paper);transition:transform .15s}
+  .toggle input:checked{background:var(--y);border-color:var(--y)}
+  .toggle input:checked::after{transform:translateX(18px);background:var(--ink)}
 
   #wedge{position:absolute;left:-9999px;opacity:0;height:1px;width:1px}
 
+  .busca{position:relative}
+  .busca svg.i{position:absolute;left:.85rem;top:.95rem;color:var(--dim);width:1.2em;height:1.2em}
+  .busca input{padding-left:2.5rem}
+
   ul.items{list-style:none;padding:0;margin:.5rem 0 0}
   ul.items li{
-    display:flex;align-items:center;gap:.6rem;padding:.55rem .6rem;border:1px solid var(--edge);
-    border-radius:6px;margin-bottom:.4rem;background:var(--panel);
+    position:relative;display:flex;align-items:center;gap:.7rem;padding:.7rem .75rem .7rem 1.05rem;border:1px solid var(--edge);
+    border-radius:14px;margin-bottom:.5rem;background:var(--panel);overflow:hidden;
   }
-  ul.items li.done{opacity:.5;border-color:var(--ok)}
-  ul.items li.over{border-color:var(--alert)}
+  ul.items li::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--edge)}
+  ul.items li.part::before{background:var(--y)}
+  ul.items li.done::before{background:var(--ok)}
+  ul.items li.over::before{background:var(--stop)}
+  ul.items li.done{opacity:.6}
   ul.items .desc{flex:1;min-width:0}
-  ul.items .desc b{display:block;font-weight:500;font-size:.9rem;overflow-wrap:anywhere}
+  ul.items .desc b{display:block;font-weight:600;font-size:.95rem;line-height:1.25;overflow-wrap:anywhere}
   ul.items .desc small{color:var(--dim);font-family:var(--mono);font-size:.74rem}
-  ul.items .n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+  ul.items .n{font-family:var(--display);font-weight:700;font-size:1.5rem;white-space:nowrap}
   ul.items .n.full{color:var(--ok)}
-  ul.items .n.over{color:var(--alert)}
+  ul.items .n.over{color:var(--stop)}
+  ul.items .btn.sm{min-height:42px}
+  .empty{color:var(--dim);font-size:.92rem;padding:.8rem 0;text-align:center}
 
-  #cam{width:100%;border-radius:8px;background:#000;display:block}
-  .camwrap{margin-bottom:.8rem}
+  .camwrap{position:relative;margin-bottom:.8rem;border-radius:18px;overflow:hidden;background:#000}
+  #cam{width:100%;display:block;max-height:60vh;object-fit:cover}
+  .scanframe{position:absolute;inset:16% 9%;pointer-events:none;border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+  .scanframe::before,.scanframe::after{content:"";position:absolute;width:34px;height:34px;border:4px solid var(--y)}
+  .scanframe::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-radius:12px 0 0 0}
+  .scanframe::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 12px 0}
+  .scanframe i{position:absolute;left:6%;right:6%;top:50%;height:2px;background:var(--y);box-shadow:0 0 8px var(--y);animation:barre 1.6s ease-in-out infinite alternate}
+  @keyframes barre{from{top:18%}to{top:82%}}
+  .camwrap .btn{border-radius:0;border-width:1px 0 0}
 
-  .lead{font-size:1.4rem;font-family:var(--mono);font-weight:600}
-  .group{margin-bottom:1.4rem}
-  .group h3{font-size:.9rem;margin:0 0 .4rem;font-weight:600}
+  /* ---- resumen ---- */
+  .hero{border-radius:18px;padding:1.1rem 1.1rem 1rem;margin-bottom:1.1rem;background:var(--panel);border:1px solid var(--edge);border-left:8px solid var(--edge)}
+  .hero.ok{background:var(--ok-bg);border-color:#1f5a30;border-left-color:var(--ok)}
+  .hero.warn{background:var(--warn-bg);border-color:#6b6610;border-left-color:var(--y)}
+  .hero h2{font-size:2rem;margin:0}
+  .hero p.note{margin:.3rem 0 0;color:#E4E4DE}
+  .group{margin-bottom:1.3rem}
+  .group h3{font-family:var(--display);font-size:1.15rem;letter-spacing:.04em;text-transform:uppercase;margin:0 0 .4rem;font-weight:700}
   .group h3 em{font-style:normal;color:var(--dim);font-weight:400}
-  .empty{color:var(--dim);font-size:.88rem;padding:.6rem 0}
-  .btn.grande{width:100%;font-size:1.3rem;font-weight:700;padding:1.1rem .8rem;margin-bottom:.2rem}
-  dialog{background:var(--panel);color:var(--paper);border:1px solid var(--edge);border-radius:8px;max-width:92vw;width:420px}
-  dialog::backdrop{background:rgba(0,0,0,.7)}
+  .lead{font-size:1.4rem;font-family:var(--mono);font-weight:600}
+
+  /* ---- diálogos (hoja desde abajo en el teléfono) ---- */
+  dialog{background:var(--panel);color:var(--paper);border:1px solid var(--edge);border-radius:20px;max-width:92vw;width:440px;padding:0}
+  dialog h2{font-size:1.35rem}
+  dialog::backdrop{background:rgba(0,0,0,.72)}
+  @media (max-width:600px){
+    dialog{margin:auto 0 0;max-width:100%;width:100%;border-radius:22px 22px 0 0;border-width:1px 0 0;padding-bottom:env(safe-area-inset-bottom);animation:sube .22s ease-out}
+  }
+  @keyframes sube{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 </style>
 </head>
 <body>
 
 <div id="chqLogin" hidden><form id="chqForm">
+  <img class="logo" src="armor_wordmark.png" alt="Armor Market">
   <h2>Chequeo de facturas</h2>
   <p class="note">Elige tu sede y escribe tu PIN.</p>
   <div class="chq-sedes" id="chqSedes">
@@ -163,41 +275,53 @@
   </div>
   <input type="text" id="chqNom" placeholder="Tu nombre" maxlength="40" autocomplete="name" style="font-family:var(--sans)">
   <input type="password" id="chqPin" placeholder="PIN" inputmode="numeric" maxlength="8" autocomplete="off" style="font-family:var(--mono);letter-spacing:.4rem;text-align:center">
-  <button class="btn go grande" type="submit" id="chqEntrar" style="margin-top:.6rem">Entrar</button>
+  <button class="btn primary grande" type="submit" id="chqEntrar" style="margin-top:.6rem">Entrar</button>
   <div id="chqErr"></div>
 </form></div>
 <script>if(window.SEDES_API) document.body.classList.add("chq-bloqueado");</script>
 
-<header>
-  <h1>Chequeo de facturas</h1>
-  <span class="doc" id="docLabel">sin factura</span>
-  <button class="icon-btn" id="chqSalir" hidden style="font-size:.8rem"></button>
+<header class="appbar">
+  <img src="armor_wordmark.png" alt="Armor Market" width="94" height="30">
+  <div class="who" id="who" hidden>
+    <span class="avatar" id="avatar"></span>
+    <button id="chqSalir" hidden><svg class="i" viewBox="0 0 24 24"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9"/></svg><span id="chqSalirTxt"></span></button>
+  </div>
 </header>
-
-<nav>
-  <button id="tab1" aria-current="true">1 · Cargar</button>
-  <button id="tab2" disabled>2 · Chequear</button>
-  <button id="tab3" disabled>3 · Resumen</button>
-</nav>
+<div class="ctx"><span class="k">Documento</span><span class="doc" id="docLabel">sin factura</span></div>
 
 <main>
 
 <!-- ============ 1. CARGAR ============ -->
 <section id="s1">
-  <h2>Cargar la factura</h2>
-  <p class="note">Sube el PDF de la nota de entrega o de la factura (el que imprime Profit) y la app lee los renglones.</p>
+  <div class="hero-load">
+    <img src="escudo.png" alt="" width="68" height="68">
+    <div>
+      <p class="k">Armor Market</p>
+      <h2>Chequear mercancía</h2>
+      <p class="hola" id="hola">Sube el PDF de la nota de entrega o de la factura.</p>
+    </div>
+  </div>
+
+  <div class="aviso" id="avisoIos" hidden>
+    <span style="flex:1">Para instalarla como app: toca <b>Compartir</b> y luego <b>Añadir a pantalla de inicio</b>.</span>
+    <button class="btn ghost sm" id="avisoCerrar">Entendido</button>
+  </div>
+  <div class="aviso" id="avisoInstalar" hidden>
+    <span style="flex:1">Instala la app en tu teléfono.</span>
+    <button class="btn primary sm" id="btnInstalar">Instalar</button>
+  </div>
 
   <div class="drop">
-    <button class="btn go grande" id="btnPdf">Subir PDF</button>
-    <div class="row">
-      <button class="btn" id="btnFoto">Tomar foto</button>
-      <button class="btn" id="btnArchivo">Elegir imagen</button>
+    <button class="btn primary grande" id="btnPdf"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg> Subir PDF</button>
+    <div class="tiles">
+      <button class="tile" id="btnFoto"><svg class="i" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Tomar foto</span></button>
+      <button class="tile" id="btnArchivo"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></svg><span>Elegir imagen</span></button>
     </div>
-    <button class="btn ghost" id="btnTexto">Pegar el texto de la factura</button>
+    <button class="btn ghost" id="btnTexto"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg> Pegar el texto de la factura</button>
   </div>
 
   <details style="margin:.9rem 0">
-    <summary class="note" id="catResumen">Catálogo de códigos de barras: no cargado</summary>
+    <summary id="catResumen">Catálogo de códigos de barras: no cargado</summary>
     <p class="note">La app baja sola, una vez al día, la lista de productos con sus códigos de barras de las tres sedes (Chaguaramos, Boleita y La Guaira). También puedes actualizarla ahora.</p>
     <button class="btn" id="btnCatAct">Actualizar catálogo ahora</button>
     <div class="status" id="catMsg"></div>
@@ -206,13 +330,13 @@
   </details>
 
   <details id="profitBloque" style="margin:.9rem 0">
-    <summary class="note">Buscar por número en Profit (requiere la conexión al servidor)</summary>
+    <summary class="link">Buscar por número en Profit (requiere la conexión al servidor)</summary>
     <div class="drop">
       <input type="text" id="profitNum" inputmode="numeric" autocomplete="off" placeholder="N° de factura (ej. 40165747)" style="font-family:var(--mono);font-size:1.2rem">
       <button class="btn" id="btnProfit">Buscar en Profit</button>
       <div class="status" id="profitMsg"></div>
       <details style="margin-top:.6rem">
-        <summary class="note">Ajustes de conexión</summary>
+        <summary class="link">Ajustes de conexión</summary>
         <input type="text" id="cfgUrl" placeholder="Dirección de la API (vacío si abriste la app desde el servidor)" style="font-family:var(--mono)">
         <input type="password" id="cfgToken" placeholder="Token de acceso" style="font-family:var(--mono)">
         <button class="btn ghost sm" id="btnCfg" style="width:100%">Guardar ajustes</button>
@@ -238,26 +362,32 @@
   </div>
 
   <div id="tableBox" hidden>
-    <div class="row" style="align-items:center;margin-bottom:.3rem">
-      <label style="flex:2">
-        <input type="text" id="docNum" placeholder="N° de factura o nota" style="font-family:var(--sans)">
-      </label>
-      <button class="btn sm ghost" id="btnAddRow" style="flex:0 0 auto">+ Renglón</button>
+    <div class="card listo">
+      <p class="k">Factura cargada</p>
+      <input type="text" id="docNum" placeholder="N° de factura o nota" style="font-family:var(--sans)">
+      <p class="resumen-carga" id="rowCount"></p>
+      <button class="btn primary grande" id="btnEmpezar">Empezar chequeo</button>
     </div>
-    <p class="note" id="rowCount"></p>
-    <table>
-      <thead><tr><th>Código</th><th>Descripción</th><th>Cant.</th><th></th></tr></thead>
-      <tbody id="tbody"></tbody>
-    </table>
-    <div class="row" style="margin-top:.9rem">
-      <button class="btn go" id="btnEmpezar">Empezar chequeo</button>
-    </div>
-    <button class="btn ghost sm" id="btnBorrarTodo" style="margin-top:.5rem;width:100%">Descartar y cargar otra factura</button>
+    <details class="card revisar">
+      <summary class="link">Revisar y corregir renglones</summary>
+      <div class="row" style="margin:.6rem 0 .4rem"><button class="btn sm ghost" id="btnAddRow">+ Renglón</button></div>
+      <table>
+        <thead><tr><th>Código</th><th>Descripción</th><th>Cant.</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </details>
+    <button class="btn ghost sm" id="btnBorrarTodo" style="width:100%">Descartar y cargar otra factura</button>
   </div>
 </section>
 
 <!-- ============ 2. CHEQUEAR ============ -->
 <section id="s2" hidden>
+  <div class="progress">
+    <div class="top"><span class="k">Avance</span><span class="pct" id="pgPct">0%</span></div>
+    <div class="meter"><i id="pgBar"></i></div>
+    <div class="sub"><span id="pgRen">0 de 0 renglones</span><span id="pgPza">0 de 0 piezas</span></div>
+  </div>
+
   <div class="signal" id="signal">
     <p class="verdict" id="sigVerdict">Listo para escanear</p>
     <p class="what" id="sigWhat">Dispara el lector o busca el producto por descripción.</p>
@@ -270,32 +400,33 @@
     <div><b id="tNovedad">0</b><span>novedades</span></div>
   </div>
 
+  <button class="btn primary grande" id="btnCam"><svg class="i" viewBox="0 0 24 24"><path d="M4 5v14M7 5v14M11 5v14M14 5v14M17 5v14M20 5v14" /><path d="M4 5v14M11 5v14M17 5v14" stroke-width="3.2"/></svg> Escanear con la cámara</button>
+  <div class="camwrap" id="camWrap" hidden>
+    <video id="cam" playsinline muted></video>
+    <div class="scanframe"><i></i></div>
+    <button class="btn ghost sm" id="btnCamStop" style="width:100%">Cerrar cámara</button>
+  </div>
+
   <label class="toggle">
     <input type="checkbox" id="modoPda">
-    Modo PDA — el lector láser escribe directo, sin teclado en pantalla
+    <span>Modo PDA: el lector láser escribe directo, sin teclado en pantalla</span>
   </label>
   <input id="wedge" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 
-  <div class="row">
-    <button class="btn" id="btnCam">Escanear con la cámara</button>
-  </div>
-  <div class="camwrap" id="camWrap" hidden>
-    <video id="cam" playsinline muted></video>
-    <button class="btn ghost sm" id="btnCamStop" style="width:100%;margin-top:.4rem">Cerrar cámara</button>
-  </div>
-
-  <input type="search" id="buscar" placeholder="Buscar por descripción, código o código de barras" style="font-family:var(--sans)">
+  <div class="busca"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input type="search" id="buscar" placeholder="Buscar producto o código" style="font-family:var(--sans)"></div>
   <ul class="items" id="lista"></ul>
 
   <div class="row" style="margin-top:1rem">
-    <button class="btn primary" id="btnCerrar">Cerrar chequeo</button>
+    <button class="btn primary" id="btnCerrar">Terminar y ver resumen</button>
   </div>
 </section>
 
 <!-- ============ 3. RESUMEN ============ -->
 <section id="s3" hidden>
-  <h2 id="resTitulo">Resumen</h2>
-  <p class="note" id="resNota"></p>
+  <div class="hero" id="resHero">
+    <h2 id="resTitulo">Resumen</h2>
+    <p class="note" id="resNota"></p>
+  </div>
 
   <div class="group" id="gFalta"></div>
   <div class="group" id="gSobra"></div>
@@ -311,6 +442,12 @@
 </section>
 
 </main>
+
+<nav class="tabbar">
+  <button id="tab1" aria-current="true"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg><span>Cargar</span></button>
+  <button id="tab2" disabled><svg class="i" viewBox="0 0 24 24"><path d="M4 5v14M7 5v14M11 5v14M14 5v14M17 5v14M20 5v14" /><path d="M4 5v14M11 5v14M17 5v14" stroke-width="3.2"/></svg><span>Chequear</span></button>
+  <button id="tab3" disabled><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="2.6"/></svg><span>Resumen</span></button>
+</nav>
 
 <dialog id="dlgAsignar">
   <div style="padding:1rem">
@@ -383,8 +520,12 @@ function $(id){ return document.getElementById(id); }
   function abrir(s){
     document.body.classList.remove("chq-bloqueado");
     $("chqLogin").hidden = true;
+    $("who").hidden = false;
     $("chqSalir").hidden = false;
-    $("chqSalir").textContent = "Salir · " + (NOMBRE[s.sede] || s.sede);
+    $("chqSalirTxt").textContent = (NOMBRE[s.sede] || s.sede) + " · Salir";
+    const nombre = (s.por || "").trim().split(/\s+/)[0] || "";
+    $("avatar").textContent = (nombre[0] || "?").toUpperCase();
+    $("hola").textContent = "Hola" + (nombre ? ", " + nombre : "") + ". Sube el PDF de la nota de entrega o de la factura.";
     $("profitBloque").hidden = true;     // la búsqueda en Profit solo existe en el servidor de la tienda
   }
   function pedir(msg){ $("chqLogin").hidden = false; $("chqErr").textContent = msg || ""; }
@@ -509,7 +650,7 @@ $("btnProfit").onclick = async ()=>{
     doc = String(f.numero || num);
     $("docNum").value = doc;
     $("docLabel").textContent = doc + (f.cliente_nombre ? " · " + f.cliente_nombre : "");
-    pintarTabla();
+    mostrarCargada();
     msg.textContent = f.anulada ? "⚠ Esta factura está ANULADA." :
       rows.length + (rows.length === 1 ? " renglón cargado" : " renglones cargados") +
       (f.cliente_nombre ? " · " + f.cliente_nombre : "") + ".";
@@ -526,8 +667,9 @@ const CAT_ARCHIVOS = ["conteo_CHAG.json", "conteo_BOLEITA.json", "conteo_GUAIRA.
 const normCodigo = s => String(s == null ? "" : s).trim().toUpperCase().replace(/[\s\-_.]/g, "");
 
 function pintarCatResumen(){
+  $("catResumen").dataset.ok = catalogo ? "1" : "0";
   $("catResumen").textContent = catalogo
-    ? "Catálogo de códigos de barras: " + catalogo.n + " códigos · " + (catalogo.detalle || catalogo.fecha)
+    ? "Catálogo: " + catalogo.n.toLocaleString("es-VE") + " códigos de barras · " + (catalogo.detalle || catalogo.fecha)
     : "Catálogo de códigos de barras: no cargado";
 }
 function guardarCatalogo(porBarra, detalle){
@@ -645,7 +787,7 @@ async function leerPDF(file){
       return;
     }
     rows = filas;
-    pintarTabla();
+    mostrarCargada();
   }catch(err){
     $("ocrStatus").textContent = "No se pudo leer el PDF: " + err.message;
     $("ocrBar").style.width = "0";
@@ -699,7 +841,7 @@ $("btnCancelPaste").onclick = ()=>{ $("pasteBox").hidden = true; };
 $("btnParsePaste").onclick = ()=>{
   const r = parsear($("pasteArea").value);
   if(!r.length){ alert("No se reconoció ningún renglón. Revisa que cada línea tenga código, descripción y cantidad."); return; }
-  rows = r; $("pasteBox").hidden = true; pintarTabla();
+  rows = r; $("pasteBox").hidden = true; mostrarCargada();
 };
 
 async function leerImagen(file){
@@ -727,7 +869,7 @@ async function leerImagen(file){
       return;
     }
     rows = r;
-    pintarTabla();
+    mostrarCargada();
   }catch(err){
     $("ocrStatus").textContent = "No se pudo leer la imagen: " + err.message;
     $("ocrBar").style.width = "0";
@@ -836,6 +978,11 @@ function parsear(texto){
 }
 
 /* ---------- tabla editable ---------- */
+// al cargar una factura, la vista baja sola hasta el botón "Empezar chequeo"
+function mostrarCargada(){
+  pintarTabla();
+  setTimeout(()=>$("tableBox").scrollIntoView({ behavior:"smooth", block:"start" }), 60);
+}
 function pintarTabla(){
   $("tableBox").hidden = false;
   const tb = $("tbody");
@@ -861,7 +1008,7 @@ function pintarTabla(){
     tb.appendChild(tr);
   });
   const piezas = rows.reduce((a,r)=>a+r.qty,0);
-  $("rowCount").textContent = rows.length + " renglones · " + piezas + " piezas";
+  $("rowCount").textContent = rows.length + (rows.length === 1 ? " renglón" : " renglones") + " · " + piezas + (piezas === 1 ? " pieza" : " piezas");
   $("tab2").disabled = rows.length === 0;
   $("tab3").disabled = rows.length === 0;
   guardarSesion();
@@ -967,6 +1114,13 @@ function pintarChequeo(){
   $("tOk").textContent = ok;
   $("tFalta").textContent = falta;
   $("tNovedad").textContent = nov;
+  const totQ = rows.reduce((a,r)=>a+r.qty,0), totG = rows.reduce((a,r)=>a+Math.min(r.got,r.qty),0);
+  const pct = totQ ? Math.floor(totG/totQ*100) : 0;
+  $("pgPct").textContent = pct + "%";
+  $("pgBar").style.width = pct + "%";
+  $("pgBar").classList.toggle("full", totQ > 0 && totG >= totQ);
+  $("pgRen").textContent = ok + " de " + rows.length + (rows.length === 1 ? " renglón" : " renglones");
+  $("pgPza").textContent = totG + " de " + totQ + " piezas";
 
   const q = norm($("buscar").value);
   const ul = $("lista");
@@ -979,6 +1133,7 @@ function pintarChequeo(){
       const li = document.createElement("li");
       if(r.got > r.qty) li.className = "over";
       else if(r.got >= r.qty) li.className = "done";
+      else if(r.got > 0) li.className = "part";
       li.innerHTML =
         '<div class="desc"><b>'+esc(r.desc||"(sin descripción)")+'</b><small>'+esc(r.code)+(barrasDe(r)[0] ? ' · '+esc(barrasDe(r)[0]) : '')+'</small></div>'+
         '<span class="n '+(r.got>r.qty?"over":r.got>=r.qty?"full":"")+'">'+r.got+'/'+r.qty+'</span>';
@@ -1141,6 +1296,7 @@ function pintarResumen(){
 
   const limpio = !falta.length && !sobra.length && !desc.length;
   $("resTitulo").textContent = limpio ? "Factura conforme" : "Factura con novedades";
+  $("resHero").className = "hero " + (limpio ? "ok" : "warn");
   $("resNota").textContent = limpio
     ? (rows.length === 1 ? "El único renglón llegó completo. " : "Los " + rows.length + " renglones llegaron completos. ") + (doc ? "Factura " + doc + "." : "")
     : "Revisa lo que está abajo antes de firmar. " + (doc ? "Factura " + doc + "." : "");
@@ -1204,6 +1360,21 @@ $("btnNueva").onclick = ()=>{
     pintarTabla(); pintarChequeo();
     const hechos = rows.reduce((a,r)=>a+r.got,0);
     if(hechos > 0) ir(2);
+  }
+})();
+
+/* ---------- instalar como app y funcionar sin conexión ---------- */
+(function(){
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const instalada = window.navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+  if(ios && !instalada && !load("aviso_ios", false)) $("avisoIos").hidden = false;
+  $("avisoCerrar").onclick = ()=>{ $("avisoIos").hidden = true; save("aviso_ios", true); };
+  let ev = null;
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); ev = e; if(!instalada) $("avisoInstalar").hidden = false; });
+  $("btnInstalar").onclick = async ()=>{ if(!ev) return; ev.prompt(); try{ await ev.userChoice; }catch(e){} ev = null; $("avisoInstalar").hidden = true; };
+  window.addEventListener("appinstalled", ()=>{ $("avisoInstalar").hidden = true; });
+  if("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")){
+    window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
   }
 })();
 </script>
