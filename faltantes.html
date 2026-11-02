@@ -46,8 +46,8 @@
   .card .det{border-top:1px solid #eee;padding:10px 14px}
   .est{font-size:12px;font-weight:700;border-radius:12px;padding:2px 10px}
   .est-Solicitado{background:#fff3cd;color:#7a5b00}
-  .est-En\ preparación{background:#e3f2fd;color:var(--azul)}
-  .est-Por\ facturar{background:#ede7f6;color:#4527a0}
+  .est-En_preparación{background:#e3f2fd;color:var(--azul)}
+  .est-Por_facturar{background:#ede7f6;color:#4527a0}
   .est-Facturado{background:#e8f5e9;color:var(--verde)}
   .est-Anulado{background:#eee;color:#777}
   tr.Listo td{background:#e8f5e9} tr.Novedad td{background:#ffebee}
@@ -348,7 +348,7 @@ function cabecera(p, extra=''){
   const nL=p.items.filter(i=>i.estado==='Listo').length, nN=p.items.filter(i=>i.estado==='Novedad').length;
   return `<div class="cab" data-id="${esc(p.id)}">
     <b>${NOMBRE[p.destino]} ← ${NOMBRE[p.origen]}</b>
-    <span class="est est-${esc(p.estado)}">${esc(p.estado)}</span>
+    <span class="est est-${esc(p.estado).replace(/\s+/g,'_')}">${esc(p.estado)}</span>
     <span class="resumen">${esc(p.fecha)} · ${p.items.length} productos${nL?` · ${nL} listos`:''}${nN?` · <span style="color:var(--rojo)">${nN} novedades</span>`:''}</span>
     <span class="resumen">pidió ${esc(p.creado_por)}${p.preparado_por?` · preparó ${esc(p.preparado_por)}`:''}${p.nro_factura?` · factura <b>${esc(p.nro_factura)}</b>`:''}</span>
     ${extra}<span class="cod" style="margin-left:auto">${esc(p.id)}</span></div>`;
