@@ -48,7 +48,7 @@
   .msg{padding:40px;text-align:center;color:#666}
   .card{background:#fff;border-radius:12px;margin-bottom:12px;box-shadow:0 1px 3px #0001;overflow:hidden}
   .card .cab{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:12px 14px;cursor:pointer}
-  .card .num{font-family:ui-monospace,Consolas,monospace;font-size:16px;font-weight:700}
+  .card .pnum{font-family:ui-monospace,Consolas,monospace;font-size:16px;font-weight:700}
   .card .det{border-top:1px solid #eee;padding:10px 14px;overflow-x:auto}
   .card .det table{min-width:520px}
   .est{font-size:12px;font-weight:700;border-radius:12px;padding:2px 10px}
@@ -418,6 +418,12 @@ async function bajarPDF(p){
   try{ const docs=await pdfsDe(p); docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400)); }
   catch(e){ toast('⚠ '+e.message, 5000); }
 }
+function money(n){ return '$'+(Number(n)||0).toLocaleString('es-VE',{minimumFractionDigits:2, maximumFractionDigits:2}) }
+function copiar(t){
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
+  return new Promise((ok,mal)=>{ const a=document.createElement('textarea'); a.value=t; a.style.position='fixed'; a.style.opacity='0'; document.body.appendChild(a); a.select();
+    try{ document.execCommand('copy') ? ok() : mal(); }catch(e){ mal(e); } a.remove(); });
+}
 function descargar(blob, nombre){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; a.click(); }
 
 let docModal=null;
@@ -464,21 +470,25 @@ function pintarPedidos(){
     const ors=origenesDe(p), cot=mapa(p.nro_cotizacion), cpor=mapa(p.cotizado_por);
     const origen=ors.map(o=>NOMBRE[o]||o).join(' y ');
     const cotTxt=ors.filter(o=>cot[o]).map(o=>`${esMia(p)&&ors.length>1?(NOMBRE[o]||o)+': ':''}Cotización <b>${esc(cot[o])}</b>${cpor[o]?' · '+esc(cpor[o]):''}`).join(' · ');
+    const conCosto = p.items.some(i=>'costo' in i);
+    const total = p.items.reduce((s,i)=>s+(i.costo===''||i.costo==null?0:i.costo*i.cantidad),0);
     const porCotizar = p.estado==='Anulado' ? [] : (S.sede==='ADMIN' ? ors.filter(o=>!cot[o]) : (!esMia(p) && !cot[S.sede] ? [S.sede] : []));
     return `<div class="card"><div class="cab" data-n="${esc(p.numero)}">
-      <span class="num">${esc(p.numero)}</span>
+      <span class="pnum">${esc(p.numero)}</span>
       <span class="est est-${esc(p.estado)}">${esc(p.estado)}</span>
       <span><b>${esc(NOMBRE[p.sede]||p.sede)}</b> pide a ${esc(origen)}</span>
       <span class="resumen">${esc(p.fecha)} · ${esc(p.creado_por)} · ${p.items.length} productos (${u} und.)</span>
       ${cotTxt?`<span class="resumen">${cotTxt}</span>`:''}
     </div>
     ${ab?`<div class="det">
-      <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th><th>Descripción</th><th>Cód. ${esc(NOMBRE[p.sede]||'')}</th><th class="num">Cant.</th></tr>
-      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}<td class="cod">${esc(i.cod_origen)}</td><td>${esc(i.descripcion)}</td><td class="cod">${esc(i.cod_sede)}</td><td class="num"><b>${i.cantidad}</b></td></tr>`).join('')}
+      <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th><th>Descripción</th><th>Cód. ${esc(NOMBRE[p.sede]||'')}</th><th class="num">Cant.</th>${conCosto?'<th class="num">Últ. costo</th><th class="num">Subtotal</th>':''}</tr>
+      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}<td class="cod">${esc(i.cod_origen)}</td><td>${esc(i.descripcion)}</td><td class="cod">${esc(i.cod_sede)}</td><td class="num"><b>${i.cantidad}</b></td>${conCosto?(i.costo===''?'<td class="num"><span class="tag r">sin costo</span></td><td class="num">—</td>':`<td class="num">${money(i.costo)}</td><td class="num">${money(i.costo*i.cantidad)}</td>`):''}</tr>`).join('')}
+      ${conCosto?`<tr><td colspan="${ors.length>1?7:6}" class="num"><b>TOTAL A COSTO</b></td><td class="num"><b>${money(total)}</b></td></tr>`:''}
       </table>
       <div class="acciones">
         <button class="wa" data-wa="${esc(p.numero)}">📲 Compartir</button>
         <button data-pdf="${esc(p.numero)}">⬇ PDF</button>
+        ${conCosto?`<button data-copy="${esc(p.numero)}" title="Código, descripción, cantidad y costo, listo para pegar">📋 Copiar para cotización</button>`:''}
         ${porCotizar.map(o=>`<input type="text" placeholder="N° cotización${porCotizar.length>1||S.sede==='ADMIN'?' '+(NOMBRE[o]||o):''}" data-nc="${esc(p.numero)}|${o}" style="width:190px"><button class="am" data-cot="${esc(p.numero)}|${o}">Marcar cotizado</button>`).join('')}
         ${esMia(p)&&p.estado==='Enviado'&&!Object.keys(cot).length?`<button class="gris" data-anular="${esc(p.numero)}">Anular</button>`:''}
       </div></div>`:''}
@@ -487,6 +497,11 @@ function pintarPedidos(){
   document.querySelectorAll('#pedidos .cab').forEach(c=>c.onclick=()=>{ const n=c.dataset.n; abiertos.has(n)?abiertos.delete(n):abiertos.add(n); pintarPedidos(); });
   document.querySelectorAll('[data-wa]').forEach(b=>b.onclick=()=>compartir(por(b.dataset.wa)));
   document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>bajarPDF(por(b.dataset.pdf)));
+  document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
+    const p=por(b.dataset.copy), multi=new Set(p.items.map(i=>i.origen)).size>1;
+    const filas=p.items.map(i=>[...(multi?[NOMBRE[i.origen]||i.origen]:[]), i.cod_origen, i.descripcion, i.cantidad, i.costo===''?'':String(i.costo).replace('.',',')].join('\t'));
+    copiar(filas.join('\n')).then(()=>toast(`📋 Copiados ${p.items.length} productos: código, descripción, cantidad y costo`)).catch(()=>toast('No pude copiar; usa Ctrl+C sobre la tabla'));
+  });
   document.querySelectorAll('[data-cot]').forEach(b=>b.onclick=async()=>{
     const [num,o]=b.dataset.cot.split('|'), nro=document.querySelector(`[data-nc="${b.dataset.cot}"]`).value.trim();
     if (!nro) return toast('Escribe el número de cotización de Profit.');

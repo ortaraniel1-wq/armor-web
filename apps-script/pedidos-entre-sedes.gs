@@ -105,6 +105,8 @@ function listar(sede) {
     const o = Object.assign({}, p); delete o._fila;
     let its = (det[p.numero] || []).sort((a, b) => a.n - b.n);
     if (sede !== 'ADMIN' && p.sede !== sede) its = its.filter(i => i.origen === sede);   // cada sede ve solo lo que le piden a ella
+    // costo: solo para la sede que cotiza (la de origen) y Administración
+    its.forEach(i => { if (sede === 'ADMIN' || i.origen === sede) { const c = costos(i.origen)[String(i.cod_origen).trim()]; i.costo = c === undefined ? '' : c; } });
     o.items = its; return o;
   })
              .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || String(b.numero).localeCompare(String(a.numero)));
@@ -169,7 +171,14 @@ function anular(sede, b) {
   return { ok: true };
 }
 
-/* ---------- costos (el puente de cada sede los sigue mandando; hoy no se usan en la página) ---------- */
+/* ---------- costos (los manda el puente de cada sede cada 30 min; se muestran en Pedidos a la sede que cotiza) ---------- */
+const _costos = {};
+function costos(sede) {
+  if (_costos[sede]) return _costos[sede];
+  const m = {}, h = hoja('Costos_' + sede);
+  if (h && h.getLastRow() > 1) h.getRange(2, 1, h.getLastRow() - 1, 2).getValues().forEach(r => { if (r[0] !== '') m[String(r[0]).trim()] = Number(r[1]) || 0; });
+  return _costos[sede] = m;
+}
 function recibirCostos(b) {
   const tok = PropertiesService.getScriptProperties().getProperty('TOKEN_PUENTE');
   if (!tok || b.token !== tok) return { ok: false, error: 'Token inválido' };
