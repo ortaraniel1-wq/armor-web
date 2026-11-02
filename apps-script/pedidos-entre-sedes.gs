@@ -23,7 +23,7 @@ const COL_COLA = ['numero', 'origen', 'destino', 'estado', 'nro_cotizacion', 'er
 const COL_SOL = ['numero', 'fecha', 'sede', 'creado_por', 'origenes', 'productos', 'unidades', 'estado', 'nro_cotizacion', 'cotizado_por', 'actualizado', 'nota'];
 /* columnas que deben guardarse como texto (Sheets les quita los ceros a la izquierda o las vuelve fecha) */
 const TEXTO = new Set(['fecha', 'actualizado', 'nro_cotizacion', 'cod_origen', 'barra', 'cod_sede', 'error']);
-const COL_DET = ['numero', 'n', 'origen', 'cod_origen', 'barra', 'descripcion', 'rubro', 'cod_sede', 'disp_origen', 'cantidad', 'asignada'];
+const COL_DET = ['numero', 'n', 'origen', 'cod_origen', 'barra', 'descripcion', 'rubro', 'cod_sede', 'disp_origen', 'cantidad', 'asignada', 'unidad'];
 
 /* ---------- configuración inicial (opcional: las hojas también se crean solas) ---------- */
 function configurar() {
@@ -139,7 +139,7 @@ function crear(sede, b) {
   })[c] ?? ''));
   const filas = items.map((x, i) => COL_DET.map(c => ({
     numero, n: i + 1, origen: x.origen, cod_origen: t(x.codO), barra: t(x.barra), descripcion: x.desc, rubro: x.rubro,
-    cod_sede: t(x.codB), disp_origen: Number(x.disp) || 0, cantidad: Number(x.cantidad)
+    cod_sede: t(x.codB), disp_origen: Number(x.disp) || 0, cantidad: Number(x.cantidad), unidad: String(x.unidad || '').slice(0, 10)
   })[c] ?? ''));
   const h = hoja(H_DET);
   h.getRange(h.getLastRow() + 1, 1, filas.length, COL_DET.length).setValues(filas);

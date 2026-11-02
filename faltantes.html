@@ -40,6 +40,7 @@
   .step input[type=number]{width:52px;padding:4px;border:1px solid var(--borde);border-radius:6px;text-align:center;-moz-appearance:textfield}
   .step input::-webkit-outer-spin-button,.step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   #cuerpo tr.sel td{background:#fff8d6}
+  .uni{font-size:11px;color:#666;font-weight:600;margin-left:2px}
   .cod{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#555}
   .sede{font-weight:600}
   .tag{font-size:11px;border-radius:4px;padding:1px 6px;background:#eee;white-space:nowrap}
@@ -251,7 +252,7 @@ function agrupar(json){
     if (!g){ g={barra, stock:0, desc:'', linea:'', mejor:-1e9}; m.set(barra,g); }
     const s=Number(r[c.stock_total])||0;
     g.stock+=s;
-    if (s>g.mejor || !g.desc){ g.mejor=s; g.desc=String(r[c.descripcion]).trim(); g.linea=r[c.linea]; g.codigo=r[c.codigo]; }
+    if (s>g.mejor || !g.desc){ g.mejor=s; g.desc=String(r[c.descripcion]).trim(); g.linea=r[c.linea]; g.codigo=r[c.codigo]; g.unidad=String(c.unidad!==undefined?r[c.unidad]:'').trim(); }
   }
   return m;
 }
@@ -286,7 +287,7 @@ function calcular(){
     if (d && ['SERV','MINER'].includes(d.linea)) continue;
     filas.push({ k:dest+'|'+barra, barra, desc:(d||o).desc,
       rubro: d?(RUBROS[d.linea]||RUBROS[o.linea]||'OTROS'):noCod(),
-      codB: d?d.codigo:'—', origen, otraSede:origen===k1?k2:k1, codO:o.codigo, disp:o.stock, otro:origen===k1?sb:sa });
+      codB: d?d.codigo:'—', origen, otraSede:origen===k1?k2:k1, codO:o.codigo, uni:o.unidad||'', disp:o.stock, otro:origen===k1?sb:sa });
   }
   filas.sort((a,b)=>a.rubro.localeCompare(b.rubro) || a.desc.localeCompare(b.desc));
   pintarRubros(); pintar();
@@ -312,7 +313,7 @@ function pintar(){
       <td>${esc(f.desc)} ${f.rubro===noCod()?'<span class="tag r">crear código</span>':''}</td>
       <td class="cod">${esc(f.codB)}</td><td class="cod">${esc(f.barra)}</td>
       <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.otraSede].nombre}: ${f.otro}</span>`:''}</td>
-      <td class="num">${f.disp}</td>
+      <td class="num">${f.disp} <span class="uni">${esc(f.uni)}</span></td>
       <td class="num"><span class="step"><button type="button" data-d="-1" aria-label="menos">−</button><input type="number" inputmode="numeric" min="0" max="${f.disp}" value="${cant(f)}"><button type="button" data-d="1" aria-label="más">+</button></span></td></tr>`).join('')+
     (v.length>LIM?`<tr><td colspan="6" style="text-align:center;color:#888">Mostrando ${LIM} de ${v.length}. Usa el buscador o elige un rubro.</td></tr>`:'');
   document.querySelectorAll('#cuerpo input').forEach(inp=>{
@@ -353,10 +354,10 @@ $('#enviar').onclick=async()=>{
   if (!b.dataset.c){ b.dataset.c='1'; b.textContent=`Confirmar: ${ped.length} productos (${u} und.)`; return setTimeout(()=>{delete b.dataset.c; b.textContent='📤 Enviar pedido'},6000); }
   delete b.dataset.c; b.disabled=true; b.textContent='Enviando…';
   try{
-    const items=ped.map(f=>({origen:f.origen, codO:f.codO, barra:f.barra, desc:f.desc, rubro:f.rubro, codB:f.codB, disp:f.disp, cantidad:cant(f)}));
+    const items=ped.map(f=>({origen:f.origen, codO:f.codO, barra:f.barra, desc:f.desc, rubro:f.rubro, codB:f.codB, disp:f.disp, unidad:f.uni, cantidad:cant(f)}));
     const j=await api({accion:'crear', destino:destino(), items});
     const doc={numero:j.numero, fecha:j.fecha, sede:destino(), creado_por:S.por, estado:'Enviado',
-      items:items.map((x,i)=>({n:i+1, origen:x.origen, cod_origen:x.codO, barra:x.barra, descripcion:x.desc, rubro:x.rubro, cod_sede:x.codB, cantidad:x.cantidad}))};
+      items:items.map((x,i)=>({n:i+1, origen:x.origen, cod_origen:x.codO, barra:x.barra, descripcion:x.desc, rubro:x.rubro, cod_sede:x.codB, unidad:x.unidad, cantidad:x.cantidad}))};
     ped.forEach(f=>delete ediciones[f.k]); store.set('ed', ediciones); pintar();
     abrirModal(doc); refrescar();
   }catch(err){ toast('⚠ '+err.message, 6000); }
@@ -390,12 +391,12 @@ async function crearPDF(p, origen, conCot){
   let y=33; info.forEach(([a,b])=>{ d.setFont('helvetica','bold'); d.text(a,12,y); d.setFont('helvetica','normal'); d.text(String(b),45,y); y+=6; });
   if (p.estado==='Anulado'){ d.setTextColor(198,40,40); d.setFont('helvetica','bold'); d.setFontSize(14); d.text('ANULADO',W-12,33,{align:'right'}); d.setTextColor(30,30,30); }
   d.autoTable({startY:y+2, margin:{left:12,right:12},
-    head:[nroCot?['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Solic.','Asig.']:['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Cant.']],
-    body:lst.map((i,k)=>nroCot?[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.cantidad,asig(i)]:[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.cantidad]),
+    head:[nroCot?['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Unid.','Solic.','Asig.']:['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Unid.','Cant.']],
+    body:lst.map((i,k)=>nroCot?[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.unidad||'',i.cantidad,asig(i)]:[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.unidad||'',i.cantidad]),
     styles:{fontSize:8.5,cellPadding:1.6,valign:'middle'},
     headStyles:{fillColor:[255,205,17],textColor:20,fontStyle:'bold'},
-    columnStyles: nroCot ? {0:{cellWidth:8,halign:'center'},1:{cellWidth:24},2:{cellWidth:27},4:{cellWidth:22},5:{cellWidth:12,halign:'center'},6:{cellWidth:12,halign:'center',fontStyle:'bold'}}
-                         : {0:{cellWidth:8,halign:'center'},1:{cellWidth:27},2:{cellWidth:28},4:{cellWidth:24},5:{cellWidth:13,halign:'center',fontStyle:'bold'}},
+    columnStyles: nroCot ? {0:{cellWidth:8,halign:'center'},1:{cellWidth:22},2:{cellWidth:26},4:{cellWidth:20},5:{cellWidth:13,halign:'center'},6:{cellWidth:12,halign:'center'},7:{cellWidth:12,halign:'center',fontStyle:'bold'}}
+                         : {0:{cellWidth:8,halign:'center'},1:{cellWidth:24},2:{cellWidth:27},4:{cellWidth:22},5:{cellWidth:13,halign:'center'},6:{cellWidth:13,halign:'center',fontStyle:'bold'}},
     alternateRowStyles:{fillColor:[247,247,247]}});
   const n=d.getNumberOfPages();
   for (let i=1;i<=n;i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140); d.text(`${p.numero}${nroCot?' · cotización '+nroCot:''} · ${sede} a ${para} · página ${i} de ${n}`,W/2,290,{align:'center'}); }
@@ -510,7 +511,7 @@ function pintarPedidos(){
     </div>
     ${ab?`<div class="det">
       <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}${verCodO?`<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th>`:''}<th>Descripción</th>${verCodD?`<th>Cód. ${esc(NOMBRE[p.sede]||'')}</th>`:''}<th class="num">Solicitada</th><th class="num">Asignada</th>${conCosto?'<th class="num">Costo</th><th class="num">Subtotal</th>':''}</tr>
-      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}${verCodO?`<td class="cod">${esc(i.cod_origen)}</td>`:''}<td>${esc(i.descripcion)}</td>${verCodD?`<td class="cod">${esc(i.cod_sede)}</td>`:''}<td class="num">${i.cantidad}</td><td class="num">${editable(p,i,porCotizar)?`<span class="step" data-as="${esc(p.numero)}|${i.n}"><button type="button" data-d="-1">−</button><input type="number" inputmode="numeric" min="0" value="${asignada(p,i)}"><button type="button" data-d="1">+</button></span>`:(verAsig(i)?`<b${asignada(p,i)<i.cantidad?' style="color:#c62828"':''}>${asignada(p,i)}</b>`:'<span class="resumen">—</span>')}</td>${conCosto?(i.costo===''?'<td class="num"><span class="tag r">sin costo</span></td><td class="num">—</td>':`<td class="num">${money(i.costo)}</td><td class="num" data-sub="${esc(p.numero)}|${i.n}">${money(i.costo*asignada(p,i))}</td>`):''}</tr>`).join('')}
+      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}${verCodO?`<td class="cod">${esc(i.cod_origen)}</td>`:''}<td>${esc(i.descripcion)}</td>${verCodD?`<td class="cod">${esc(i.cod_sede)}</td>`:''}<td class="num">${i.cantidad} <span class="uni">${esc(i.unidad||'')}</span></td><td class="num">${editable(p,i,porCotizar)?`<span class="step" data-as="${esc(p.numero)}|${i.n}"><button type="button" data-d="-1">−</button><input type="number" inputmode="numeric" min="0" value="${asignada(p,i)}"><button type="button" data-d="1">+</button></span> <span class="uni">${esc(i.unidad||'')}</span>`:(verAsig(i)?`<b${asignada(p,i)<i.cantidad?' style="color:#c62828"':''}>${asignada(p,i)}</b> <span class="uni">${esc(i.unidad||'')}</span>`:'<span class="resumen">—</span>')}</td>${conCosto?(i.costo===''?'<td class="num"><span class="tag r">sin costo</span></td><td class="num">—</td>':`<td class="num">${money(i.costo)}</td><td class="num" data-sub="${esc(p.numero)}|${i.n}">${money(i.costo*asignada(p,i))}</td>`):''}</tr>`).join('')}
       ${conCosto?`<tr><td colspan="${5+(ors.length>1?1:0)+(verCodO?1:0)+(verCodD?1:0)}" class="num"><b>TOTAL A COSTO</b> <span class="resumen">(<span data-ua="${esc(p.numero)}">${uAsig}</span> und. asignadas)</span></td><td class="num"><b data-tot="${esc(p.numero)}">${money(total)}</b></td></tr>`:''}
       </table>
       <div class="acciones">
@@ -536,7 +537,7 @@ function pintarPedidos(){
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
     const p=por(b.dataset.copy), multi=new Set(p.items.map(i=>i.origen)).size>1;
     const its=p.items.filter(i=>asignada(p,i)>0);
-    const filas=its.map(i=>[...(multi?[NOMBRE[i.origen]||i.origen]:[]), i.cod_origen, i.descripcion, asignada(p,i), i.costo===''?'':String(i.costo).replace('.',',')].join('\t'));
+    const filas=its.map(i=>[...(multi?[NOMBRE[i.origen]||i.origen]:[]), i.cod_origen, i.descripcion, asignada(p,i), i.unidad||'', i.costo===''?'':String(i.costo).replace('.',',')].join('\t'));
     if (!its.length) return toast('Todas las cantidades asignadas están en 0.');
     copiar(filas.join('\n')).then(()=>toast(`📋 Copiados ${its.length} productos con la cantidad asignada y su costo`)).catch(()=>toast('No pude copiar; usa Ctrl+C sobre la tabla'));
   });
