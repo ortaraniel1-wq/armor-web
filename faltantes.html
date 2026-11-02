@@ -372,12 +372,12 @@ async function libsPDF(){
   return !!(window.jspdf && window.jspdf.jsPDF.API.autoTable);
 }
 /* Un PDF por sede de origen: cada sede recibe solo lo que se le pide */
-async function crearPDF(p, origen){
+async function crearPDF(p, origen, conCot){
   if (!(await libsPDF())) throw new Error('No pude cargar el generador de PDF');
   const {jsPDF}=window.jspdf, d=new jsPDF({unit:'mm', format:'a4'}), W=210;
   const sede=NOMBRE[p.sede]||p.sede, para=NOMBRE[origen]||origen;
   const lst=p.items.filter(i=>i.origen===origen), unidades=lst.reduce((s,i)=>s+Number(i.cantidad),0);
-  const nroCot=mapa(p.nro_cotizacion)[origen]||'';
+  const nroCot=conCot ? (mapa(p.nro_cotizacion)[origen]||'') : '';
   const asig=i=> (i.asignada===''||i.asignada==null) ? Number(i.cantidad) : Number(i.asignada);
   const uAsig=lst.reduce((s,i)=>s+asig(i),0);
   d.setFillColor(27,27,27); d.rect(0,0,W,24,'F');
@@ -401,27 +401,29 @@ async function crearPDF(p, origen){
   for (let i=1;i<=n;i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140); d.text(`${p.numero}${nroCot?' · cotización '+nroCot:''} · ${sede} a ${para} · página ${i} de ${n}`,W/2,290,{align:'center'}); }
   return d.output('blob');
 }
-function nombrePDF(p,o){ const c=mapa(p.nro_cotizacion)[o]; return `${c?'Cotizacion_'+sinAcento(c)+'_':'Pedido_'}${p.numero}_${sinAcento(NOMBRE[p.sede]||p.sede)}_para_${sinAcento(NOMBRE[o]||o)}.pdf` }
-async function pdfsDe(p){
-  const ors=[...new Set(p.items.map(i=>i.origen))];
-  return Promise.all(ors.map(async o=>({o, nombre:nombrePDF(p,o), blob:await crearPDF(p,o)})));
+function nombrePDF(p,o,conCot){ const c=conCot?mapa(p.nro_cotizacion)[o]:''; return `${c?'Cotizacion_'+sinAcento(c)+'_':'Pedido_'}${p.numero}_${sinAcento(NOMBRE[p.sede]||p.sede)}_para_${sinAcento(NOMBRE[o]||o)}.pdf` }
+async function pdfsDe(p, conCot){
+  let ors=[...new Set(p.items.map(i=>i.origen))];
+  if (conCot){ const c=mapa(p.nro_cotizacion); ors=ors.filter(o=>c[o]); }
+  return Promise.all(ors.map(async o=>({o, nombre:nombrePDF(p,o,conCot), blob:await crearPDF(p,o,conCot)})));
 }
 const esPC = !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && matchMedia('(pointer:fine)').matches;
-async function compartir(p){
+async function compartir(p, conCot){
   // En la computadora: baja los PDF y abre WhatsApp Web para arrastrarlos al grupo
   let ventana=null;
   if (esPC) ventana=window.open('', 'whatsapp_web');   // se abre en el clic para que el navegador no la bloquee
   try{
-    const docs=await pdfsDe(p);
+    const docs=await pdfsDe(p, conCot);
+    if (!docs.length) throw new Error('Todavía no hay cotización');
     if (esPC){
       docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400));
       if (ventana){ ventana.location.href='https://web.whatsapp.com/'; }
       else window.open('https://web.whatsapp.com/', 'whatsapp_web');
-      toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Arrástralo${docs.length>1?'s':''} al grupo Pedidos en WhatsApp Web.`, 7000);
+      toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Arrástralo${docs.length>1?'s':''} al grupo ${conCot?'de almacén':'Pedidos'} en WhatsApp Web.`, 7000);
       return;
     }
     const files=docs.map(x=>new File([x.blob], x.nombre, {type:'application/pdf'}));
-    const texto=`Pedido ${p.numero} · ${NOMBRE[p.sede]||p.sede} · ${p.creado_por||''} → `+docs.map(x=>NOMBRE[x.o]||x.o).join(' y ');
+    const texto=(conCot?`Cotización ${docs.map(x=>mapa(p.nro_cotizacion)[x.o]).join(' y ')} · `:'')+`Pedido ${p.numero} · ${NOMBRE[p.sede]||p.sede} · ${p.creado_por||''} → `+docs.map(x=>NOMBRE[x.o]||x.o).join(' y ');
     if (navigator.canShare && navigator.canShare({files})){
       try{ await navigator.share({files, title:`Pedido ${p.numero}`, text:texto}); return; }
       catch(e){ if (e.name==='AbortError') return; }
@@ -430,8 +432,8 @@ async function compartir(p){
     toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Adjúntalo${docs.length>1?'s':''} en el grupo Pedidos de WhatsApp.`, 5000);
   }catch(e){ if (ventana) ventana.close(); toast('⚠ '+e.message, 5000); }
 }
-async function bajarPDF(p){
-  try{ const docs=await pdfsDe(p); docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400)); }
+async function bajarPDF(p, conCot){
+  try{ const docs=await pdfsDe(p, conCot); docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400)); }
   catch(e){ toast('⚠ '+e.message, 5000); }
 }
 function money(n){ return '$'+(Number(n)||0).toLocaleString('es-VE',{minimumFractionDigits:2, maximumFractionDigits:2}) }
@@ -512,8 +514,9 @@ function pintarPedidos(){
       ${conCosto?`<tr><td colspan="${5+(ors.length>1?1:0)+(verCodO?1:0)+(verCodD?1:0)}" class="num"><b>TOTAL A COSTO</b> <span class="resumen">(<span data-ua="${esc(p.numero)}">${uAsig}</span> und. asignadas)</span></td><td class="num"><b data-tot="${esc(p.numero)}">${money(total)}</b></td></tr>`:''}
       </table>
       <div class="acciones">
-        <button class="wa" data-wa="${esc(p.numero)}">📲 Compartir</button>
-        <button data-pdf="${esc(p.numero)}">⬇ PDF</button>
+        <button class="wa" data-wa="${esc(p.numero)}">📲 Compartir pedido</button>
+        <button data-pdf="${esc(p.numero)}">⬇ PDF pedido</button>
+        ${ors.some(o=>cot[o])?`<button class="wa" style="background:#1565c0" data-wac="${esc(p.numero)}">📄 Compartir cotización</button><button data-pdfc="${esc(p.numero)}">⬇ PDF cotización</button>`:''}
         ${conCosto?`<button data-copy="${esc(p.numero)}" title="Código, descripción, cantidad y costo, listo para pegar">📋 Copiar para cotización</button>`:''}
         ${porCotizar.map(o=>{ const c=(p.cola||{})[o]||{}, k=`${esc(p.numero)}|${o}`, sufijo=porCotizar.length>1||S.sede==='ADMIN'?' '+(NOMBRE[o]||o):'';
           if (c.estado==='Pendiente'||c.estado==='Procesando') return `<span class="tag" style="padding:6px 10px">⏳ Generando cotización en Profit${sufijo}… (menos de 1 min)</span>`;
@@ -528,6 +531,8 @@ function pintarPedidos(){
   document.querySelectorAll('#pedidos .cab').forEach(c=>c.onclick=()=>{ const n=c.dataset.n; abiertos.has(n)?abiertos.delete(n):abiertos.add(n); pintarPedidos(); });
   document.querySelectorAll('[data-wa]').forEach(b=>b.onclick=()=>compartir(por(b.dataset.wa)));
   document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>bajarPDF(por(b.dataset.pdf)));
+  document.querySelectorAll('[data-wac]').forEach(b=>b.onclick=()=>compartir(por(b.dataset.wac), true));
+  document.querySelectorAll('[data-pdfc]').forEach(b=>b.onclick=()=>bajarPDF(por(b.dataset.pdfc), true));
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
     const p=por(b.dataset.copy), multi=new Set(p.items.map(i=>i.origen)).size>1;
     const its=p.items.filter(i=>asignada(p,i)>0);
