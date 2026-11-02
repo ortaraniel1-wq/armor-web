@@ -411,17 +411,14 @@ async function pdfsDe(p, conCot){
 }
 const esPC = !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && matchMedia('(pointer:fine)').matches;
 async function compartir(p, conCot){
-  // En la computadora: baja los PDF y abre WhatsApp Web para arrastrarlos al grupo
-  let ventana=null;
-  if (esPC) ventana=window.open('', 'whatsapp_web');   // se abre en el clic para que el navegador no la bloquee
+  // En la computadora: solo baja los PDF (no abre otro WhatsApp Web, que choca con el que ya está abierto)
+  const ventana=null;
   try{
     const docs=await pdfsDe(p, conCot);
     if (!docs.length) throw new Error('Todavía no hay cotización');
     if (esPC){
       docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400));
-      if (ventana){ ventana.location.href='https://web.whatsapp.com/'; }
-      else window.open('https://web.whatsapp.com/', 'whatsapp_web');
-      toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Arrástralo${docs.length>1?'s':''} al grupo ${conCot?'de almacén':'Pedidos'} en WhatsApp Web.`, 7000);
+      toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Ve a tu WhatsApp y arrástralo${docs.length>1?'s':''} al grupo ${conCot?'de almacén':'Pedidos'}.`, 8000);
       return;
     }
     const files=docs.map(x=>new File([x.blob], x.nombre, {type:'application/pdf'}));
