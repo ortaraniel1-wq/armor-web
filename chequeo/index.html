@@ -119,6 +119,10 @@
   .card.revisar{padding:.7rem 1rem}
   .card.revisar[open]{padding-bottom:1rem}
   #tableBox{scroll-margin-top:7.5rem}
+  .chips{display:flex;gap:.5rem;flex-wrap:wrap}
+  .chips button{flex:1 1 auto;white-space:nowrap;font-size:.95rem;padding:.75rem .7rem;background:var(--panel-2);color:var(--paper);border:2px solid var(--edge);border-radius:12px;font-weight:600;cursor:pointer}
+  .chips button.on{background:var(--y);color:var(--ink);border-color:var(--y)}
+  .chips.falta button{border-color:var(--y)}
   .tiles{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:.6rem 0}
   .tile{
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;min-height:86px;
@@ -287,7 +291,7 @@
     <button id="chqSalir" hidden><svg class="i" viewBox="0 0 24 24"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M16 8l4 4-4 4M20 12H9"/></svg><span id="chqSalirTxt"></span></button>
   </div>
 </header>
-<div class="ctx"><span class="k">Documento</span><span class="doc" id="docLabel">sin factura</span></div>
+<div class="ctx"><span class="k" id="ctxTipo">Documento</span><span class="doc" id="docLabel">sin factura</span></div>
 
 <main>
 
@@ -428,6 +432,15 @@
     <p class="note" id="resNota"></p>
   </div>
 
+  <div class="card" id="enviaCard">
+    <p class="k" style="font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 .5rem;font-size:.85rem">¿Quién envía la mercancía?</p>
+    <div class="chips" id="enviaChips">
+      <button data-s="CHAG">Chaguaramos</button>
+      <button data-s="GUAIRA">La Guaira</button>
+      <button data-s="BOLEITA">Boleíta</button>
+    </div>
+  </div>
+
   <button class="btn primary grande" id="btnCompartir"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg> Compartir informe</button>
   <div class="status" id="shareMsg" style="margin:.2rem 0 .7rem;text-align:center"></div>
   <div class="row">
@@ -491,6 +504,7 @@ let uid = 1;
 let docInfo = {};        // destino y almacén de origen, leídos de la nota de entrega
 const SEDE_NOMBRE = {BOLEITA:"Boleíta", CHAG:"Chaguaramos", GUAIRA:"La Guaira", ADMIN:"Administración"};
 const ALMACEN_SEDE = {CHAG:"Chaguaramos", MACUT:"La Guaira", PRINC:"Boleíta"};
+const ALMACEN_KEY  = {CHAG:"CHAG", MACUT:"GUAIRA", PRINC:"BOLEITA"};   // almacén de Profit -> sede
 
 /* ---------- catálogo de códigos de barras (código interno de Profit <-> barra) ---------- */
 const sinCerosG = s => String(s||"").trim().toUpperCase().replace(/[\s\-_.]/g,"").replace(/^0+/, "");
@@ -935,7 +949,11 @@ function parsearProfit(texto){
     const m = l.match(reRenglon);
     if(m){
       if(!almacenOrigen) almacenOrigen = m[5].toUpperCase();
-      ultima = { id: uid++, code: m[1], bar: "", desc: m[2], qty: Math.max(1, Math.round(numVe(m[4]) || 1)), got: 0 };
+      // algunas facturas traen el código de barras entre el código y la descripción
+      let desc = m[2], bar = "";
+      const mb = desc.match(/^(\d{8,14})\s+(.+)$/);
+      if(mb){ bar = mb[1]; desc = mb[2]; }
+      ultima = { id: uid++, code: m[1], bar: bar, barras: bar ? [bar] : [], desc: desc, qty: Math.max(1, Math.round(numVe(m[4]) || 1)), got: 0 };
       out.push(ultima);
     } else if(reSalta.test(l)){
       ultima = null;
@@ -946,12 +964,15 @@ function parsearProfit(texto){
 
   if(out.length){
     const mCli = String(texto).match(/^\s*CLIENTE:\s*\S+\s+(.+?)\s*$/im);
-    docInfo = { destino: mCli ? limpiar(mCli[1]) : "", almacen: almacenOrigen };
+    const et = mDoc ? mDoc[0].toLowerCase() : "";
+    docInfo = { destino: mCli ? limpiar(mCli[1]) : "", almacen: almacenOrigen,
+                tipo: /factura/.test(et) ? "factura" : /despacho/.test(et) ? "despacho" : /entrega/.test(et) ? "entrega" : "" };
   }
   if(out.length && mDoc){
     doc = mDoc[1];
     $("docNum").value = doc;
     $("docLabel").textContent = doc;
+    $("ctxTipo").textContent = tipoDoc().corto === "Documento" ? "Documento" : tipoDoc().largo.replace(" nro.","");
   }
   return out;
 }
@@ -1311,13 +1332,14 @@ function pintarResumen(){
   $("resHero").className = "hero " + (limpio ? "ok" : "warn");
   $("resNota").textContent = limpio
     ? "Llegó todo completo: " + rows.length + (rows.length === 1 ? " renglón" : " renglones") + ", " + rows.reduce((a,r)=>a+r.qty,0) + " piezas."
-    : "Revisa lo de abajo y compártelo con la sede que despacha, para que ajuste la nota.";
+    : "Revisa lo de abajo y compártelo con la sede que envía, para que ajuste " + tipoDoc().palabra + ".";
 
   grupo("gFalta",  "Faltantes", falta,  r => (r.qty - r.got) + " de menos");
   grupo("gSobra",  "Sobrantes", sobra,  r => (r.got - r.qty) + " de más");
   grupo("gDesconocido", "Códigos que no están en la factura",
         desc.map(c=>({code:c, desc:"Código sin renglón", _n:unknown[c]})), r => r._n + " lectura(s)");
   grupo("gOk",     "Completos", okList, r => r.qty + " piezas");
+  pintarEnvia();
   prepararInforme();
 }
 function grupo(id, titulo, lista, detalle){
@@ -1331,45 +1353,72 @@ function grupo(id, titulo, lista, detalle){
 }
 
 /* ---------- informe de recepción: lo que la otra sede necesita para acomodar la nota ---------- */
+function sedeDeTexto(t){                       // "ARMOR MARKET BOLEITA" -> "Boleíta"
+  t = String(t || "").toUpperCase();
+  return /BOLE/.test(t) ? "Boleíta" : /CHAGUA/.test(t) ? "Chaguaramos" : /GUAIRA|MACUT/.test(t) ? "La Guaira" : "";
+}
+function tipoDoc(){
+  const t = docInfo.tipo;
+  if(t === "factura") return { largo:"Factura nro.", corto:"Factura", palabra:"la factura" };
+  if(t === "despacho") return { largo:"Nota de despacho nro.", corto:"Nota", palabra:"la nota" };
+  if(t === "entrega") return { largo:"Nota de entrega nro.", corto:"Nota", palabra:"la nota" };
+  return { largo:"Documento nro.", corto:"Documento", palabra:"el documento" };
+}
+function enviaKey(){                           // quién envía: lo que se eligió, o lo que dice el almacén del documento
+  return docInfo.envia || ALMACEN_KEY[docInfo.almacen] || "";
+}
+function pintarEnvia(){
+  const ek = enviaKey();
+  document.querySelectorAll("#enviaChips button").forEach(b => b.classList.toggle("on", b.dataset.s === ek));
+  $("enviaChips").classList.toggle("falta", !ek);
+}
+document.querySelectorAll("#enviaChips button").forEach(b => b.onclick = ()=>{
+  docInfo.envia = b.dataset.s; guardarSesion(); pintarEnvia(); prepararInforme(); $("shareMsg").textContent = "";
+});
 function datosInforme(){
   const faltan = rows.filter(r => r.got < r.qty);
   const sobran = rows.filter(r => r.got > r.qty);
   const completos = rows.filter(r => r.got === r.qty);
   const fuera = Object.keys(unknown).map(c => ({ code:c, veces:unknown[c] }));
   const ses = window.chqSesion || null;
+  const sedeSes = ses && ["BOLEITA","CHAG","GUAIRA"].includes(ses.sede) ? SEDE_NOMBRE[ses.sede] : "";
+  const ek = enviaKey();
   return {
     faltan, sobran, completos, fuera,
     conforme: !faltan.length && !sobran.length && !fuera.length,
-    origen: docInfo.almacen ? (ALMACEN_SEDE[docInfo.almacen] || docInfo.almacen) : "",
-    destino: docInfo.destino || (ses ? (SEDE_NOMBRE[ses.sede] || ses.sede) : ""),
+    envia: ek ? SEDE_NOMBRE[ek] : "",
+    recibe: sedeSes || sedeDeTexto(docInfo.destino) || "",
     reviso: ses ? ses.por + " (" + (SEDE_NOMBRE[ses.sede] || ses.sede) + ")" : "",
     fecha: new Date().toLocaleString("es-VE", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" }),
     piezasNota: rows.reduce((a,r)=>a+r.qty,0),
-    piezasLlegaron: rows.reduce((a,r)=>a+r.got,0)
+    piezasLlegaron: rows.reduce((a,r)=>a+r.got,0),
+    tipo: tipoDoc()
   };
 }
 function textoResumen(){
-  const I = datosInforme();
-  let t = "*RECEPCIÓN · NOTA " + (doc || "sin número") + "*\n";
-  if(I.origen || I.destino) t += (I.origen ? "Despacha: " + I.origen : "") + (I.origen && I.destino ? " → " : "") + (I.destino ? "Recibe: " + I.destino : "") + "\n";
+  const I = datosInforme(), T = I.tipo;
+  let t = "*RECEPCIÓN · " + T.largo.toUpperCase() + " " + (doc || "sin número") + "*\n";
+  t += "Envía: " + (I.envia || "—") + "\n";
+  t += "Recibe: " + (I.recibe || "—") + "\n";
   t += "Revisó: " + (I.reviso || "—") + " · " + I.fecha + "\n\n";
   if(I.conforme){
     return t + "✅ *CONFORME*: llegó todo completo (" + rows.length + " renglones, " + I.piezasNota + " piezas).\n";
   }
-  t += "⚠️ *CON NOVEDADES*" + (I.origen ? " · " + I.origen + ", favor ajustar la nota" : "") + "\n";
+  t += "⚠️ *CON NOVEDADES*" + (I.envia ? " · " + I.envia + ", favor ajustar " + T.palabra : "") + "\n";
   t += "Llegaron " + I.piezasLlegaron + " de " + I.piezasNota + " piezas.\n\n";
+  const linea = (r, q) => "• " + r.code + " " + r.desc + " — " + T.corto + " " + r.qty + ", recibí " + r.got + " (" + q + ")\n";
   if(I.faltan.length){
     t += "*FALTANTES (" + I.faltan.length + ")*\n";
-    I.faltan.forEach(r => t += "• " + r.code + " " + r.desc + " — nota " + r.qty + ", llegó " + r.got + " (faltan " + (r.qty - r.got) + ")\n");
+    I.faltan.forEach(r => t += linea(r, "faltan " + (r.qty - r.got)));
     t += "\n";
   }
   if(I.sobran.length){
     t += "*SOBRANTES (" + I.sobran.length + ")*\n";
-    I.sobran.forEach(r => t += "• " + r.code + " " + r.desc + " — nota " + r.qty + ", llegó " + r.got + " (sobran " + (r.got - r.qty) + ")\n");
+    I.sobran.forEach(r => t += linea(r, "sobran " + (r.got - r.qty)));
     t += "\n";
   }
   if(I.fuera.length){
-    t += "*CÓDIGOS QUE NO ESTÁN EN LA NOTA (" + I.fuera.length + ")*\n";
+    t += "*CÓDIGOS QUE NO ESTÁN EN " + T.palabra.replace(/^la |^el /,"").toUpperCase() + " (" + I.fuera.length + ")*\n";
     I.fuera.forEach(f => t += "• " + f.code + " (" + f.veces + " " + (f.veces === 1 ? "lectura" : "lecturas") + ")\n");
     t += "\n";
   }
@@ -1400,10 +1449,10 @@ async function crearInformePDF(){
   if(!conLogo){ d.setTextColor(253,245,0); d.setFont("helvetica","bold"); d.setFontSize(18); d.text("ARMOR MARKET", 12, 16); }
   d.setTextColor(255,255,255); d.setFont("helvetica","bold"); d.setFontSize(11);
   d.text("INFORME DE RECEPCIÓN", W-12, 11, { align:"right" });
-  d.setFontSize(17); d.text("NOTA " + (doc || "—"), W-12, 20, { align:"right" });
+  d.setFontSize(17); d.text(I.tipo.largo.toUpperCase() + " " + (doc || "—"), W-12, 20, { align:"right" });
 
   d.setTextColor(30,30,30); d.setFontSize(10);
-  const info = [["Despacha:", I.origen || "—"], ["Recibe:", I.destino || "—"], ["Revisó:", I.reviso || "—"], ["Fecha:", I.fecha],
+  const info = [["Envía:", I.envia || "—"], ["Recibe:", I.recibe || "—"], ["Revisó:", I.reviso || "—"], ["Fecha:", I.fecha],
                 ["Piezas:", "llegaron " + I.piezasLlegaron + " de " + I.piezasNota + " (" + rows.length + " renglones)"]];
   let y = 35;
   info.forEach(([k,v]) => { d.setFont("helvetica","bold"); d.text(k, 12, y); d.setFont("helvetica","normal"); d.text(String(v), 38, y); y += 6; });
@@ -1428,19 +1477,19 @@ async function crearInformePDF(){
     d.text("Llegó todo completo: " + rows.length + " renglones, " + I.piezasNota + " piezas. No hay nada que ajustar.", 12, y + 4); y += 12;
   }
   if(I.faltan.length){
-    titulo("Faltantes (" + I.faltan.length + ")  -  ajustar la nota");
-    tabla(["#","Código","Descripción","Nota","Llegó","Faltan"],
+    titulo("Faltantes (" + I.faltan.length + ")  -  ajustar " + I.tipo.palabra);
+    tabla(["#","Código","Descripción",I.tipo.corto,"Recibí","Faltan"],
       I.faltan.map((r,i)=>[i+1, r.code, r.desc, r.qty, r.got, r.qty - r.got]),
       { 0:{cellWidth:9,halign:"center"}, 1:{cellWidth:24}, 3:num, 4:num, 5:Object.assign({fontStyle:"bold"}, num) });
   }
   if(I.sobran.length){
     titulo("Sobrantes (" + I.sobran.length + ")");
-    tabla(["#","Código","Descripción","Nota","Llegó","Sobran"],
+    tabla(["#","Código","Descripción",I.tipo.corto,"Recibí","Sobran"],
       I.sobran.map((r,i)=>[i+1, r.code, r.desc, r.qty, r.got, r.got - r.qty]),
       { 0:{cellWidth:9,halign:"center"}, 1:{cellWidth:24}, 3:num, 4:num, 5:Object.assign({fontStyle:"bold"}, num) });
   }
   if(I.fuera.length){
-    titulo("Códigos que no están en la nota (" + I.fuera.length + ")");
+    titulo("Códigos que no están en " + I.tipo.palabra + " (" + I.fuera.length + ")");
     tabla(["Código leído","Lecturas"], I.fuera.map(f=>[f.code, f.veces]), { 1:{ halign:"center", cellWidth:26 } });
   }
   if(!I.conforme){
@@ -1455,14 +1504,14 @@ async function crearInformePDF(){
 
   const n = d.getNumberOfPages();
   for(let i = 1; i <= n; i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140);
-    d.text("Nota " + (doc || "—") + " · Informe de recepción · " + I.fecha + " · página " + i + " de " + n, W/2, 290, { align:"center" }); }
+    d.text(I.tipo.corto + " " + (doc || "—") + " · Informe de recepción · " + I.fecha + " · página " + i + " de " + n, W/2, 290, { align:"center" }); }
   return d.output("blob");
 }
 
 // El PDF se prepara al abrir el resumen: así el botón comparte al instante
 // (el iPhone cancela el compartir si hay que esperar demasiado después del toque).
 let informeListo = null;
-const firmaInforme = () => doc + "|" + rows.map(r=>r.got).join(",") + "|" + JSON.stringify(unknown);
+const firmaInforme = () => doc + "|" + enviaKey() + "|" + rows.map(r=>r.got).join(",") + "|" + JSON.stringify(unknown);
 async function prepararInforme(){
   if(!window.SEDES_API) return;               // el PDF solo existe en la versión web
   const f = firmaInforme();
@@ -1479,13 +1528,18 @@ async function copiarTexto(t){
 }
 $("btnCompartir").onclick = async ()=>{
   const btn = $("btnCompartir"), msg = $("shareMsg");
-  const texto = textoResumen(), titulo = "Recepción nota " + (doc || "");
+  const texto = textoResumen(), titulo = "Recepción " + datosInforme().tipo.corto.toLowerCase() + " " + (doc || "");
+  if(!datosInforme().envia){
+    msg.textContent = "Primero elige quién envía la mercancía.";
+    $("enviaCard").scrollIntoView({ behavior:"smooth", block:"center" });
+    return;
+  }
   btn.disabled = true; msg.textContent = "";
   try{
     if(window.SEDES_API){
       if(!informeListo || informeListo.firma !== firmaInforme()){ msg.textContent = "Preparando el PDF…"; await prepararInforme(); }
       if(informeListo){
-        const nombre = "Recepcion_nota_" + (doc || "sin_numero").replace(/\W+/g,"_") + ".pdf";
+        const nombre = "Recepcion_" + datosInforme().tipo.corto + "_" + (doc || "sin_numero").replace(/\W+/g,"_") + ".pdf";
         const archivo = new File([informeListo.blob], nombre, { type:"application/pdf" });
         if(navigator.canShare && navigator.canShare({ files:[archivo] })){
           await navigator.share({ files:[archivo], title:titulo, text:texto });
