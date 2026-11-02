@@ -18,10 +18,11 @@
 
 const SEDES = { BOLEITA: 'Boleíta', CHAG: 'Chaguaramos', GUAIRA: 'La Guaira', ADMIN: 'Administración' };
 const PREF  = { BOLEITA: 'BOL', CHAG: 'CHA', GUAIRA: 'GUA', ADMIN: 'ADM' };
-const H_SOL = 'Solicitudes', H_DET = 'Solicitud_items';
+const H_SOL = 'Solicitudes', H_DET = 'Solicitud_items', H_COLA = 'Cola_Profit';
+const COL_COLA = ['numero', 'origen', 'destino', 'estado', 'nro_cotizacion', 'error', 'pedido_por', 'fecha', 'actualizado'];
 const COL_SOL = ['numero', 'fecha', 'sede', 'creado_por', 'origenes', 'productos', 'unidades', 'estado', 'nro_cotizacion', 'cotizado_por', 'actualizado', 'nota'];
 /* columnas que deben guardarse como texto (Sheets les quita los ceros a la izquierda o las vuelve fecha) */
-const TEXTO = new Set(['fecha', 'actualizado', 'nro_cotizacion', 'cod_origen', 'barra', 'cod_sede']);
+const TEXTO = new Set(['fecha', 'actualizado', 'nro_cotizacion', 'cod_origen', 'barra', 'cod_sede', 'error']);
 const COL_DET = ['numero', 'n', 'origen', 'cod_origen', 'barra', 'descripcion', 'rubro', 'cod_sede', 'disp_origen', 'cantidad', 'asignada'];
 
 /* ---------- configuración inicial (opcional: las hojas también se crean solas) ---------- */
@@ -35,7 +36,7 @@ function configurar() {
 }
 function asegurarHojas() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  [[H_SOL, COL_SOL], [H_DET, COL_DET]].forEach(([n, cols]) => {
+  [[H_SOL, COL_SOL], [H_DET, COL_DET], [H_COLA, COL_COLA]].forEach(([n, cols]) => {
     let h = ss.getSheetByName(n);
     if (!h) h = ss.insertSheet(n);
     if (h.getLastRow() === 0) { h.appendRow(cols); h.setFrozenRows(1); h.getRange(1, 1, 1, cols.length).setFontWeight('bold'); }
@@ -56,9 +57,10 @@ function doPost(e) {
 function responder(b) {
   try {
     const acc = b.accion;
-    if (acc === 'costos') return json(recibirCostos(b));   // compatibilidad con el puente de costos
+    if (acc === 'costos') return json(recibirCostos(b));   // puente de costos
+    if (['cola', 'cola_ok', 'cola_error'].includes(acc)) return json(puenteCola(acc, b));   // puente de cotizaciones
     const sede = login(b.sede, b.pin);
-    const escribe = ['crear', 'cotizar', 'anular'].includes(acc);
+    const escribe = ['crear', 'cotizar', 'anular', 'generar'].includes(acc);
     const lock = LockService.getScriptLock();
     if (escribe) { lock.waitLock(20000); asegurarHojas(); }
     try {
@@ -68,6 +70,7 @@ function responder(b) {
         case 'crear':   return json(crear(sede, b));
         case 'cotizar': return json(cotizar(sede, b));
         case 'anular':  return json(anular(sede, b));
+        case 'generar': return json(generar(sede, b));
         default:        return json({ ok: false, error: 'Acción desconocida' });
       }
     } finally { if (escribe) lock.releaseLock(); }
@@ -103,7 +106,8 @@ function puedeVer(sede, p) {
 function listar(sede) {
   const limite = Utilities.formatDate(new Date(Date.now() - 60 * 864e5), 'America/Caracas', 'yyyy-MM-dd');
   const sols = leer(H_SOL).filter(p => puedeVer(sede, p) && String(p.fecha) >= limite);
-  const nums = new Set(sols.map(p => p.numero)), det = {};
+  const nums = new Set(sols.map(p => p.numero)), det = {}, colas = {};
+  leer(H_COLA).forEach(c => { if (nums.has(c.numero)) (colas[c.numero] = colas[c.numero] || {})[c.origen] = { estado: c.estado, error: c.error, nro: c.nro_cotizacion }; });
   leer(H_DET).forEach(it => { if (nums.has(it.numero)) { const o = Object.assign({}, it); delete o._fila; (det[it.numero] = det[it.numero] || []).push(o); } });
   return sols.map(p => {
     const o = Object.assign({}, p); delete o._fila;
@@ -111,7 +115,7 @@ function listar(sede) {
     if (sede !== 'ADMIN' && p.sede !== sede) its = its.filter(i => i.origen === sede);   // cada sede ve solo lo que le piden a ella
     // costo: solo para la sede que cotiza (la de origen) y Administración
     its.forEach(i => { if (sede === 'ADMIN' || i.origen === sede) { const c = costos(i.origen)[String(i.cod_origen).trim()]; i.costo = c === undefined ? '' : c; } });
-    o.items = its; return o;
+    o.items = its; o.cola = colas[p.numero] || {}; return o;
   })
              .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || String(b.numero).localeCompare(String(a.numero)));
 }
@@ -146,29 +150,92 @@ function crear(sede, b) {
 function mapa(t) { const m = {}; String(t || '').split(',').forEach(x => { const i = x.indexOf(':'); if (i > 0) m[x.slice(0, i).trim()] = x.slice(i + 1).trim(); }); return m; }
 function texto(m) { return Object.keys(m).map(k => k + ':' + m[k]).join(', '); }
 
-/* Quien tomó el pedido anota su cotización (opcional) */
+/* Quien tomó el pedido anota su cotización a mano */
 function cotizar(sede, b) {
   const p = leer(H_SOL).find(x => x.numero === b.numero);
   if (!p) throw new Error('Pedido no encontrado');
-  const origenes = String(p.origenes).split(',');
   const origen = sede === 'ADMIN' ? b.origen : sede;
-  if (!origenes.includes(origen)) throw new Error('A tu sede no le pidieron nada en este pedido');
-  if (p.estado === 'Anulado') throw new Error('El pedido está anulado');
+  validarOrigen(p, origen);
   if (!String(b.nro_cotizacion || '').trim()) throw new Error('Escribe el número de cotización');
-  const cot = mapa(p.nro_cotizacion), por = mapa(p.cotizado_por);
-  cot[origen] = String(b.nro_cotizacion).trim().slice(0, 30).replace(/[:,]/g, ' ');
-  por[origen] = String(b.por || '').slice(0, 40).replace(/[:,]/g, ' ');
-  p.nro_cotizacion = texto(cot); p.cotizado_por = texto(por);
-  p.estado = origenes.every(o => cot[o]) ? 'Cotizado' : 'Enviado';
-  // cantidades asignadas por quien cotiza (si no manda, queda igual a lo solicitado)
-  const asig = b.asignadas || {};
+  guardarAsignadas(p, origen, b.asignadas);
+  return aplicarCotizacion(p, origen, b.nro_cotizacion, b.por);
+}
+function validarOrigen(p, origen) {
+  if (!String(p.origenes).split(',').includes(origen)) throw new Error('A tu sede no le pidieron nada en este pedido');
+  if (p.estado === 'Anulado') throw new Error('El pedido está anulado');
+  if (mapa(p.nro_cotizacion)[origen]) throw new Error('Tu parte de este pedido ya está cotizada');
+}
+function guardarAsignadas(p, origen, asignadas) {
+  const asig = asignadas || {};
   leer(H_DET).filter(it => it.numero === p.numero && it.origen === origen).forEach(it => {
-    it.asignada = asig[it.n] === undefined ? Number(it.cantidad) : Math.max(0, Math.floor(Number(asig[it.n]) || 0));
+    it.asignada = asig[it.n] === undefined ? (it.asignada === '' ? Number(it.cantidad) : it.asignada) : Math.max(0, Math.floor(Number(asig[it.n]) || 0));
     escribirFila(H_DET, COL_DET, it);
   });
+}
+function aplicarCotizacion(p, origen, nro, por) {
+  const origenes = String(p.origenes).split(',');
+  const cot = mapa(p.nro_cotizacion), quien = mapa(p.cotizado_por);
+  cot[origen] = String(nro).trim().slice(0, 30).replace(/[:,]/g, ' ');
+  quien[origen] = String(por || '').slice(0, 40).replace(/[:,]/g, ' ');
+  p.nro_cotizacion = texto(cot); p.cotizado_por = texto(quien);
+  p.estado = origenes.every(o => cot[o]) ? 'Cotizado' : 'Enviado';
   p.actualizado = ahora();
   escribirFila(H_SOL, COL_SOL, p);
   return { ok: true, estado: p.estado };
+}
+
+/* ---------- cotización automática en Profit ---------- */
+/* La página pone el pedido en cola; el puente de la sede lo crea en Profit y devuelve el número */
+function generar(sede, b) {
+  const p = leer(H_SOL).find(x => x.numero === b.numero);
+  if (!p) throw new Error('Pedido no encontrado');
+  const origen = sede === 'ADMIN' ? b.origen : sede;
+  validarOrigen(p, origen);
+  guardarAsignadas(p, origen, b.asignadas);
+  const total = leer(H_DET).filter(it => it.numero === p.numero && it.origen === origen).reduce((s, it) => s + Number(it.asignada || 0), 0);
+  if (!total) throw new Error('Todas las cantidades asignadas están en 0');
+  const cola = leer(H_COLA).find(c => c.numero === p.numero && c.origen === origen);
+  if (cola && ['Pendiente', 'Procesando'].includes(cola.estado)) throw new Error('Ya está en cola, espera un momento');
+  const fila = { numero: p.numero, origen, destino: p.sede, estado: 'Pendiente', nro_cotizacion: '', error: '', pedido_por: String(b.por || '').slice(0, 40), fecha: ahora(), actualizado: ahora() };
+  if (cola) { Object.assign(cola, fila); escribirFila(H_COLA, COL_COLA, cola); }
+  else hoja(H_COLA).appendRow(COL_COLA.map(c => TEXTO.has(c) && fila[c] !== '' ? "'" + fila[c] : fila[c]));
+  return { ok: true, estado: 'Pendiente' };
+}
+function puenteCola(acc, b) {
+  const tok = PropertiesService.getScriptProperties().getProperty('TOKEN_PUENTE');
+  if (!tok || b.token !== tok) return { ok: false, error: 'Token inválido' };
+  if (!SEDES[b.sede] || b.sede === 'ADMIN') return { ok: false, error: 'Sede no válida' };
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    asegurarHojas();
+    const cola = leer(H_COLA);
+    if (acc === 'cola') {
+      const limite = Utilities.formatDate(new Date(Date.now() - 10 * 60000), 'America/Caracas', 'yyyy-MM-dd HH:mm');
+      // pendientes de esta sede (y los que quedaron "Procesando" más de 10 min, por si el puente se cayó)
+      const mias = cola.filter(c => c.origen === b.sede && (c.estado === 'Pendiente' || (c.estado === 'Procesando' && String(c.actualizado) < limite)));
+      const det = leer(H_DET);
+      const out = mias.map(c => {
+        c.estado = 'Procesando'; c.actualizado = ahora(); escribirFila(H_COLA, COL_COLA, c);
+        return { numero: c.numero, destino: c.destino, pedido_por: c.pedido_por,
+          items: det.filter(it => it.numero === c.numero && it.origen === b.sede && Number(it.asignada) > 0)
+                    .map(it => ({ n: it.n, cod: String(it.cod_origen).trim(), descripcion: it.descripcion, cantidad: Number(it.asignada) })) };
+      });
+      return { ok: true, cola: out };
+    }
+    const c = cola.find(x => x.numero === b.numero && x.origen === b.sede);
+    if (!c) return { ok: false, error: 'No está en cola' };
+    if (acc === 'cola_error') {
+      c.estado = 'Error'; c.error = String(b.error || 'Error').slice(0, 300); c.actualizado = ahora();
+      escribirFila(H_COLA, COL_COLA, c);
+      return { ok: true };
+    }
+    // cola_ok: Profit ya creó la cotización
+    c.estado = 'Hecho'; c.nro_cotizacion = String(b.nro_cotizacion); c.error = ''; c.actualizado = ahora();
+    escribirFila(H_COLA, COL_COLA, c);
+    const p = leer(H_SOL).find(x => x.numero === b.numero);
+    if (p && !mapa(p.nro_cotizacion)[b.sede]) aplicarCotizacion(p, b.sede, b.nro_cotizacion, (c.pedido_por || '') + ' (Profit)');
+    return { ok: true };
+  } finally { lock.releaseLock(); }
 }
 
 function anular(sede, b) {

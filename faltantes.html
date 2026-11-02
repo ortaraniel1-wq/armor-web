@@ -449,9 +449,11 @@ $('#mPdf').onclick=()=>bajarPDF(docModal);
 $('#mCerrar').onclick=()=>{ $('#modal').hidden=true; };
 
 /* ================= HISTORIAL ================= */
-let PED=[], abiertos=new Set();
+let PED=[], abiertos=new Set(), vigilando=null;
+function enCola(){ return PED.some(p=>Object.values(p.cola||{}).some(c=>c.estado==='Pendiente'||c.estado==='Procesando')); }
+function vigilar(){ if (vigilando) return; vigilando=setInterval(async()=>{ await refrescar(); if (!enCola()){ clearInterval(vigilando); vigilando=null; } }, 10000); }
 async function refrescar(){
-  try{ const j=await api({accion:'listar'}); PED=j.pedidos||[]; contador(); if(tab==='pedidos') pintarPedidos(); }
+  try{ const j=await api({accion:'listar'}); PED=j.pedidos||[]; contador(); if(tab==='pedidos' && !document.activeElement?.closest?.('#pedidos .det')) pintarPedidos(); if (enCola()) vigilar(); }
   catch(err){ if (/PIN/.test(err.message)){ store.set('ses',null); location.reload(); } }
 }
 function esMia(p){ return S.sede==='ADMIN' || p.sede===S.sede }
@@ -508,7 +510,12 @@ function pintarPedidos(){
         <button class="wa" data-wa="${esc(p.numero)}">📲 Compartir</button>
         <button data-pdf="${esc(p.numero)}">⬇ PDF</button>
         ${conCosto?`<button data-copy="${esc(p.numero)}" title="Código, descripción, cantidad y costo, listo para pegar">📋 Copiar para cotización</button>`:''}
-        ${porCotizar.map(o=>`<input type="text" placeholder="N° cotización${porCotizar.length>1||S.sede==='ADMIN'?' '+(NOMBRE[o]||o):''}" data-nc="${esc(p.numero)}|${o}" style="width:190px"><button class="am" data-cot="${esc(p.numero)}|${o}">Marcar cotizado</button>`).join('')}
+        ${porCotizar.map(o=>{ const c=(p.cola||{})[o]||{}, k=`${esc(p.numero)}|${o}`, sufijo=porCotizar.length>1||S.sede==='ADMIN'?' '+(NOMBRE[o]||o):'';
+          if (c.estado==='Pendiente'||c.estado==='Procesando') return `<span class="tag" style="padding:6px 10px">⏳ Generando cotización en Profit${sufijo}… (menos de 1 min)</span>`;
+          return `${c.estado==='Error'?`<span class="tag r" style="padding:6px 10px">⚠ ${esc(c.error)}</span>`:''}
+            <button class="am" data-gen="${k}">⚙ Generar cotización en Profit${sufijo}</button>
+            <a href="#" class="resumen" data-man="${k}">o anotar número a mano</a>
+            <span data-manbox="${k}" hidden><input type="text" placeholder="N° cotización" data-nc="${k}" style="width:150px"> <button data-cot="${k}">Marcar cotizado</button></span>`; }).join('')}
         ${esMia(p)&&p.estado==='Enviado'&&!Object.keys(cot).length?`<button class="gris" data-anular="${esc(p.numero)}">Anular</button>`:''}
       </div></div>`:''}
     </div>`;}).join('');
@@ -535,6 +542,17 @@ function pintarPedidos(){
     };
     st.querySelectorAll('button').forEach(b=>b.onclick=e=>{ e.stopPropagation(); fijar((Number(inp.value)||0)+Number(b.dataset.d)); });
     inp.onchange=()=>fijar(inp.value); inp.onfocus=()=>inp.select();
+  });
+  document.querySelectorAll('[data-man]').forEach(a=>a.onclick=e=>{ e.preventDefault(); a.hidden=true; document.querySelector(`[data-manbox="${a.dataset.man}"]`).hidden=false; });
+  document.querySelectorAll('[data-gen]').forEach(b=>b.onclick=async()=>{
+    const [num,o]=b.dataset.gen.split('|'), pp=vista(PED.find(x=>x.numero===num)), asignadas={};
+    pp.items.filter(i=>i.origen===o).forEach(i=>asignadas[i.n]=asignada(pp,i));
+    if (!Object.values(asignadas).some(v=>v>0)) return toast('Todas las cantidades asignadas están en 0.');
+    if (!b.dataset.c){ b.dataset.c='1'; b.textContent='¿Generar con estas cantidades? toca otra vez'; return; }
+    b.disabled=true;
+    try{ await api({accion:'generar', numero:num, origen:o, asignadas}); pp.items.forEach(i=>delete asig[num+'|'+i.n]);
+      toast('⏳ En cola: Profit la crea en menos de 1 minuto'); await refrescar(); vigilar(); }
+    catch(e){ toast('⚠ '+e.message, 6000); b.disabled=false; }
   });
   document.querySelectorAll('[data-cot]').forEach(b=>b.onclick=async()=>{
     const [num,o]=b.dataset.cot.split('|'), nro=document.querySelector(`[data-nc="${b.dataset.cot}"]`).value.trim();
