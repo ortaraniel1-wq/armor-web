@@ -67,6 +67,7 @@
       <option value="GUAIRA">Sede que pide: La Guaira</option>
     </select>
     <select id="origen"></select>
+    <label style="font-size:13px;white-space:nowrap"><input type="checkbox" id="soloPed"> Ver solo lo que voy a pedir</label>
     <input type="search" id="q" placeholder="Buscar descripción, código o barra…">
   </div>
   <div class="fila">
@@ -100,8 +101,7 @@ const SEDES = {
   CHAG:    {archivo:'conteo_CHAG.json',    nombre:'Chaguaramos'},
   GUAIRA:  {archivo:'conteo_GUAIRA.json',  nombre:'La Guaira'}
 };
-// Cantidad sugerida = esta fracción de lo que tiene la sede de origen (mínimo 1). Editable en pantalla.
-const FRACCION_SUGERIDA = 0.5;
+// Las cantidades arrancan en 0: quien hace el pedido escribe lo que quiere. Al Excel solo van las que tengan cantidad.
 // Líneas de Profit agrupadas en rubros
 const RUBROS = {
   BODEG:'BODEGÓN', BODEGO:'BODEGÓN',
@@ -183,7 +183,7 @@ function calcular(){
       k: dest + '|' + barra, barra, desc: (d || o).desc, rubro,
       codB: d ? d.codigo : '—',
       origen, otraSede: origen === k1 ? k2 : k1, codO: o.codigo, disp: o.stock, otro,
-      sug: Math.max(1, Math.ceil(o.stock * FRACCION_SUGERIDA))
+      sug: 0
     });
   }
   filas.sort((a,b)=>a.rubro.localeCompare(b.rubro) || a.desc.localeCompare(b.desc));
@@ -196,6 +196,7 @@ function visibles(){
   return filas.filter(f =>
     (!rubroSel || f.rubro === rubroSel) &&
     (!og || f.origen === og) &&
+    (!document.getElementById('soloPed').checked || Number((ediciones[f.k]||{}).pedir||0) > 0) &&
     (!q || (f.desc+' '+f.barra+' '+f.codB+' '+f.codO).toUpperCase().includes(q)));
 }
 
@@ -231,7 +232,7 @@ function pintar(){
       <td class="cod">${esc(f.barra)}</td>
       <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.otraSede].nombre}: ${f.otro}</span>`:''}</td>
       <td class="num">${f.disp}</td>
-      <td class="num"><input type="number" min="0" data-k="pedir" value="${e.pedir ?? f.sug}"></td>
+      <td class="num"><input type="number" min="0" data-k="pedir" max="${f.disp}" value="${e.pedir ?? f.sug}"></td>
       <td class="num"><input type="number" min="0" data-k="fisico" value="${e.fisico ?? ''}" placeholder="—"></td>
       <td>${st==='nov'?'<span class="tag r">novedad</span>':''}</td>
     </tr>`;
@@ -239,6 +240,9 @@ function pintar(){
   document.querySelectorAll('#cuerpo input').forEach(inp=>inp.onchange=()=>{
     const b = inp.closest('tr').dataset.b;
     ediciones[b] = ediciones[b] || {};
+    const fx = filas.find(x=>x.k===b);
+    if (inp.dataset.k==='pedir' && Number(inp.value) > fx.disp) inp.value = fx.disp;
+    if (Number(inp.value) < 0) inp.value = 0;
     ediciones[b][inp.dataset.k] = inp.value;
     store.set('ed', ediciones);
     const f = filas.find(x=>x.k===b);
@@ -252,8 +256,9 @@ function pintar(){
 function resumen(){
   const v = visibles();
   const nov = filas.filter(f=>estado(f)==='nov').length;
+  const ped = v.filter(f=>Number((ediciones[f.k]||{}).pedir||0) > 0).length;
   document.getElementById('resumen').textContent =
-    `${v.length} productos en vista · ${nov} novedades marcadas`;
+    `${v.length} productos en vista · ${ped} con cantidad para pedir · ${nov} novedades`;
 }
 
 function csv(nombre, cab, rows){
@@ -274,8 +279,8 @@ function cargarXLSX(){
 }
 /* Un solo Excel con una hoja por sede de origen (si no carga la librería, baja un CSV por sede) */
 function exportPedido(){
-  const v = visibles();
-  if (!v.length) return alertaSuave('No hay productos en esta vista.');
+  const v = visibles().filter(f=>Number((ediciones[f.k]||{}).pedir||0) > 0);
+  if (!v.length) return alertaSuave('Escribe la cantidad en "Pedir" de los productos que quieres. Solo esos van al Excel.');
   const dest = SEDES[destino()].nombre;
   const cab = ['Rubro','Código origen','Barra','Descripción','Disp. sistema','Cant. pedida','Cant. física','Código '+dest];
   const grupos = {};
@@ -321,6 +326,7 @@ function limpiar(){
 function alertaSuave(t){ const r=document.getElementById('resumen'); r.textContent=t; setTimeout(resumen,3500); }
 
 document.getElementById('q').oninput = pintar;
+document.getElementById('soloPed').onchange = pintar;
 document.getElementById('origen').onchange = ()=>{ pintarRubros(); pintar(); };
 document.getElementById('destino').onchange = ()=>{ store.set('dest', destino()); if (M) calcular(); };
 { const d0 = store.get('dest'); if (SEDES[d0]) document.getElementById('destino').value = d0; }
