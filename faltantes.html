@@ -264,6 +264,7 @@ function csv(nombre, cab, rows){
   a.href = URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));
   a.download = nombre; a.click();
 }
+function sinAcento(t){ return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'_') }
 function hoy(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') }
 
 function cargarXLSX(){
@@ -272,7 +273,7 @@ function cargarXLSX(){
     sc.onload=()=>ok(true); sc.onerror=()=>ok(false); document.head.appendChild(sc); });
 }
 /* Un solo Excel con una hoja por sede de origen (si no carga la librería, baja un CSV por sede) */
-async function exportPedido(){
+function exportPedido(){
   const v = visibles();
   if (!v.length) return alertaSuave('No hay productos en esta vista.');
   const dest = SEDES[destino()].nombre;
@@ -281,8 +282,8 @@ async function exportPedido(){
   v.forEach(f=>{ (grupos[f.origen] = grupos[f.origen] || []).push(f); });
   const filasDe = lst => lst.map(f=>{ const e=ediciones[f.k]||{};
     return [f.rubro,f.codO,f.barra,f.desc,f.disp,Number(e.pedir??f.sug),e.fisico===undefined||e.fisico===''?'':Number(e.fisico),f.codB]; });
-  const base = `pedido_${dest.replace(/\s+/g,'_')}_${(rubroSel||'todos').replace(/\s+/g,'_')}_${hoy()}`;
-  if (await cargarXLSX()){
+  const base = sinAcento(`pedido_${dest}_${rubroSel||'todos'}_${hoy()}`);
+  if (window.XLSX){
     const wb = XLSX.utils.book_new();
     Object.entries(grupos).forEach(([k,lst])=>{
       const ori = SEDES[k].nombre;
@@ -297,7 +298,7 @@ async function exportPedido(){
     const buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
     const el = document.createElement('a');
     el.href = URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-    el.download = base + '.xlsx'; document.body.appendChild(el); el.click(); el.remove();
+    el.download = base + '.xlsx'; el.click();
   } else {
     Object.entries(grupos).forEach(([k,lst])=>
       csv(`${base}_desde_${SEDES[k].nombre.replace(/\s+/g,'_')}.csv`, cab, filasDe(lst)));
@@ -330,6 +331,7 @@ async function hash(t){
   return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
 function arrancar(){
+  cargarXLSX();
   document.getElementById('login').remove();
   cargar().catch(e=>{ document.getElementById('carga').textContent = '⚠ ' + e.message; });
 }
