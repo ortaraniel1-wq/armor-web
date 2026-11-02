@@ -428,15 +428,18 @@
     <p class="note" id="resNota"></p>
   </div>
 
+  <button class="btn primary grande" id="btnCompartir"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg> Compartir informe</button>
+  <div class="status" id="shareMsg" style="margin:.2rem 0 .7rem;text-align:center"></div>
+  <div class="row">
+    <button class="btn" id="btnCopiar">Copiar mensaje</button>
+    <button class="btn" id="btnCsv">Descargar CSV</button>
+  </div>
+
   <div class="group" id="gFalta"></div>
   <div class="group" id="gSobra"></div>
   <div class="group" id="gDesconocido"></div>
   <div class="group" id="gOk"></div>
 
-  <div class="row">
-    <button class="btn" id="btnCopiar">Copiar resumen</button>
-    <button class="btn" id="btnCsv">Descargar CSV</button>
-  </div>
   <button class="btn ghost" id="btnVolver" style="margin-top:.5rem">Volver al chequeo</button>
   <button class="btn ghost" id="btnNueva" style="margin-top:.5rem">Nueva factura</button>
 </section>
@@ -485,6 +488,9 @@ let rows = [];          // {id, code, bar, desc, qty, got}
 let unknown = {};       // codigo -> veces
 let aliases = load("alias_codigos", {});   // codigo escaneado -> id de renglón (por código de factura)
 let uid = 1;
+let docInfo = {};        // destino y almacén de origen, leídos de la nota de entrega
+const SEDE_NOMBRE = {BOLEITA:"Boleíta", CHAG:"Chaguaramos", GUAIRA:"La Guaira", ADMIN:"Administración"};
+const ALMACEN_SEDE = {CHAG:"Chaguaramos", MACUT:"La Guaira", PRINC:"Boleíta"};
 
 /* ---------- catálogo de códigos de barras (código interno de Profit <-> barra) ---------- */
 const sinCerosG = s => String(s||"").trim().toUpperCase().replace(/[\s\-_.]/g,"").replace(/^0+/, "");
@@ -504,7 +510,7 @@ function barrasDe(r){
 
 function load(k, def){ try{ return JSON.parse(localStorage.getItem(k)) ?? def; }catch(e){ return def; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
-function guardarSesion(){ save("sesion", {doc, rows, unknown, uid}); }
+function guardarSesion(){ save("sesion", {doc, rows, unknown, uid, docInfo}); }
 function $(id){ return document.getElementById(id); }
 
 /* ---------- clave de acceso: solo en la versión publicada en la web ----------
@@ -520,6 +526,7 @@ function $(id){ return document.getElementById(id); }
   function abrir(s){
     document.body.classList.remove("chq-bloqueado");
     $("chqLogin").hidden = true;
+    window.chqSesion = s;
     $("who").hidden = false;
     $("chqSalir").hidden = false;
     $("chqSalirTxt").textContent = (NOMBRE[s.sede] || s.sede) + " · Salir";
@@ -646,7 +653,7 @@ $("btnProfit").onclick = async ()=>{
       id: uid++, code: r.codigo || "", bar: (r.barras && r.barras[0]) || "", barras: r.barras || [],
       desc: r.descripcion || "", qty: Math.max(1, Math.round(Number(r.cantidad) || 1)), got: 0
     }));
-    unknown = {};
+    unknown = {}; docInfo = { destino: f.cliente_nombre || "" };
     doc = String(f.numero || num);
     $("docNum").value = doc;
     $("docLabel").textContent = doc + (f.cliente_nombre ? " · " + f.cliente_nombre : "");
@@ -919,7 +926,7 @@ function parsearProfit(texto){
   const out = [];
   const reRenglon = /^(\S+)\s+(.+?)\s+(\S{2,6})(?:\s+\d+(?:[.,]\d+)?)?\s+(\d+(?:[.,]\d+)?)\s+([A-Za-z0-9]{2,8})\s+[\d.,]+(?:\s+[\d.,]+)?\s+[\d.,]+$/;
   const reSalta = /^(nota\s+de\s+(entrega|despacho)|factura\b|cliente|r\.?\s?i\.?\s?f|n\.?\s?i\.?\s?t|direcci|tel[eé]fonos|fecha|condici|vendedor|codigo\s+descripci|sub-?\s*total|descuento|total\b|son:|p[aá]gina|p[aá]g\b)/i;
-  let ultima = null;
+  let ultima = null, almacenOrigen = "";
   const mDoc = String(texto).match(/(?:nota\s+de\s+(?:entrega|despacho)|factura)\s*(?:no\.?|n[º°o]\.?)?\s*:?\s*(\d{4,})/i);
 
   String(texto).split(/\r?\n/).forEach(linea=>{
@@ -927,6 +934,7 @@ function parsearProfit(texto){
     if(!l) return;
     const m = l.match(reRenglon);
     if(m){
+      if(!almacenOrigen) almacenOrigen = m[5].toUpperCase();
       ultima = { id: uid++, code: m[1], bar: "", desc: m[2], qty: Math.max(1, Math.round(numVe(m[4]) || 1)), got: 0 };
       out.push(ultima);
     } else if(reSalta.test(l)){
@@ -936,6 +944,10 @@ function parsearProfit(texto){
     }
   });
 
+  if(out.length){
+    const mCli = String(texto).match(/^\s*CLIENTE:\s*\S+\s+(.+?)\s*$/im);
+    docInfo = { destino: mCli ? limpiar(mCli[1]) : "", almacen: almacenOrigen };
+  }
   if(out.length && mDoc){
     doc = mDoc[1];
     $("docNum").value = doc;
@@ -1018,7 +1030,7 @@ function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;
 $("btnAddRow").onclick = ()=>{ rows.push({id:uid++,code:"",bar:"",desc:"",qty:1,got:0}); pintarTabla(); };
 $("btnBorrarTodo").onclick = ()=>{
   if(!confirm("¿Descartar esta factura y empezar de cero?")) return;
-  rows = []; unknown = {}; doc = "";
+  rows = []; unknown = {}; doc = ""; docInfo = {};
   $("tableBox").hidden = true; $("pasteArea").value = "";
   $("tab2").disabled = $("tab3").disabled = true;
   guardarSesion();
@@ -1295,17 +1307,18 @@ function pintarResumen(){
   const desc   = Object.keys(unknown);
 
   const limpio = !falta.length && !sobra.length && !desc.length;
-  $("resTitulo").textContent = limpio ? "Factura conforme" : "Factura con novedades";
+  $("resTitulo").textContent = limpio ? "Todo conforme" : "Con novedades";
   $("resHero").className = "hero " + (limpio ? "ok" : "warn");
   $("resNota").textContent = limpio
-    ? (rows.length === 1 ? "El único renglón llegó completo. " : "Los " + rows.length + " renglones llegaron completos. ") + (doc ? "Factura " + doc + "." : "")
-    : "Revisa lo que está abajo antes de firmar. " + (doc ? "Factura " + doc + "." : "");
+    ? "Llegó todo completo: " + rows.length + (rows.length === 1 ? " renglón" : " renglones") + ", " + rows.reduce((a,r)=>a+r.qty,0) + " piezas."
+    : "Revisa lo de abajo y compártelo con la sede que despacha, para que ajuste la nota.";
 
   grupo("gFalta",  "Faltantes", falta,  r => (r.qty - r.got) + " de menos");
   grupo("gSobra",  "Sobrantes", sobra,  r => (r.got - r.qty) + " de más");
   grupo("gDesconocido", "Códigos que no están en la factura",
         desc.map(c=>({code:c, desc:"Código sin renglón", _n:unknown[c]})), r => r._n + " lectura(s)");
   grupo("gOk",     "Completos", okList, r => r.qty + " piezas");
+  prepararInforme();
 }
 function grupo(id, titulo, lista, detalle){
   const g = $(id);
@@ -1317,21 +1330,185 @@ function grupo(id, titulo, lista, detalle){
   g.innerHTML = h + '</ul>';
 }
 
-function textoResumen(){
-  const f = new Date().toLocaleString("es-VE");
-  let t = "CHEQUEO DE FACTURA" + (doc ? " " + doc : "") + "\n" + f + "\n\n";
-  const falta = rows.filter(r=>r.got < r.qty), sobra = rows.filter(r=>r.got > r.qty);
-  const desc = Object.keys(unknown);
-  if(falta.length){ t += "FALTANTES\n"; falta.forEach(r=>t += "- " + r.code + " " + r.desc + ": llegaron " + r.got + " de " + r.qty + "\n"); t += "\n"; }
-  if(sobra.length){ t += "SOBRANTES\n"; sobra.forEach(r=>t += "- " + r.code + " " + r.desc + ": llegaron " + r.got + " de " + r.qty + "\n"); t += "\n"; }
-  if(desc.length){ t += "CÓDIGOS FUERA DE FACTURA\n"; desc.forEach(c=>t += "- " + c + " (" + unknown[c] + ")\n"); t += "\n"; }
-  if(!falta.length && !sobra.length && !desc.length) t += "Todo conforme: " + rows.length + " renglones completos.\n";
-  return t;
+/* ---------- informe de recepción: lo que la otra sede necesita para acomodar la nota ---------- */
+function datosInforme(){
+  const faltan = rows.filter(r => r.got < r.qty);
+  const sobran = rows.filter(r => r.got > r.qty);
+  const completos = rows.filter(r => r.got === r.qty);
+  const fuera = Object.keys(unknown).map(c => ({ code:c, veces:unknown[c] }));
+  const ses = window.chqSesion || null;
+  return {
+    faltan, sobran, completos, fuera,
+    conforme: !faltan.length && !sobran.length && !fuera.length,
+    origen: docInfo.almacen ? (ALMACEN_SEDE[docInfo.almacen] || docInfo.almacen) : "",
+    destino: docInfo.destino || (ses ? (SEDE_NOMBRE[ses.sede] || ses.sede) : ""),
+    reviso: ses ? ses.por + " (" + (SEDE_NOMBRE[ses.sede] || ses.sede) + ")" : "",
+    fecha: new Date().toLocaleString("es-VE", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" }),
+    piezasNota: rows.reduce((a,r)=>a+r.qty,0),
+    piezasLlegaron: rows.reduce((a,r)=>a+r.got,0)
+  };
 }
+function textoResumen(){
+  const I = datosInforme();
+  let t = "*RECEPCIÓN · NOTA " + (doc || "sin número") + "*\n";
+  if(I.origen || I.destino) t += (I.origen ? "Despacha: " + I.origen : "") + (I.origen && I.destino ? " → " : "") + (I.destino ? "Recibe: " + I.destino : "") + "\n";
+  t += "Revisó: " + (I.reviso || "—") + " · " + I.fecha + "\n\n";
+  if(I.conforme){
+    return t + "✅ *CONFORME*: llegó todo completo (" + rows.length + " renglones, " + I.piezasNota + " piezas).\n";
+  }
+  t += "⚠️ *CON NOVEDADES*" + (I.origen ? " · " + I.origen + ", favor ajustar la nota" : "") + "\n";
+  t += "Llegaron " + I.piezasLlegaron + " de " + I.piezasNota + " piezas.\n\n";
+  if(I.faltan.length){
+    t += "*FALTANTES (" + I.faltan.length + ")*\n";
+    I.faltan.forEach(r => t += "• " + r.code + " " + r.desc + " — nota " + r.qty + ", llegó " + r.got + " (faltan " + (r.qty - r.got) + ")\n");
+    t += "\n";
+  }
+  if(I.sobran.length){
+    t += "*SOBRANTES (" + I.sobran.length + ")*\n";
+    I.sobran.forEach(r => t += "• " + r.code + " " + r.desc + " — nota " + r.qty + ", llegó " + r.got + " (sobran " + (r.got - r.qty) + ")\n");
+    t += "\n";
+  }
+  if(I.fuera.length){
+    t += "*CÓDIGOS QUE NO ESTÁN EN LA NOTA (" + I.fuera.length + ")*\n";
+    I.fuera.forEach(f => t += "• " + f.code + " (" + f.veces + " " + (f.veces === 1 ? "lectura" : "lecturas") + ")\n");
+    t += "\n";
+  }
+  return t + "Completos: " + I.completos.length + " de " + rows.length + " renglones.\n";
+}
+
+async function cargarLibsPDF(){
+  if(window.jspdf && window.jspdf.jsPDF.API.autoTable) return true;
+  if(!window.jspdf) await cargarScript("../js/jspdf.umd.min.js");
+  await cargarScript("../js/jspdf.plugin.autotable.min.js");
+  return !!(window.jspdf && window.jspdf.jsPDF.API.autoTable);
+}
+async function logoDataUrl(){
+  try{
+    const b = await (await fetch("armor_wordmark.png")).blob();
+    return await new Promise(ok => { const fr = new FileReader(); fr.onload = ()=>ok(fr.result); fr.onerror = ()=>ok(null); fr.readAsDataURL(b); });
+  }catch(e){ return null; }
+}
+async function crearInformePDF(){
+  if(!(await cargarLibsPDF())) throw new Error("no se pudo cargar el generador de PDF");
+  const I = datosInforme();
+  const { jsPDF } = window.jspdf, d = new jsPDF({ unit:"mm", format:"a4" }), W = 210;
+
+  d.setFillColor(22,23,26); d.rect(0,0,W,26,"F");
+  const logo = await logoDataUrl();
+  let conLogo = false;
+  if(logo){ try{ d.addImage(logo, "PNG", 12, 4.5, 52, 16.5); conLogo = true; }catch(e){} }
+  if(!conLogo){ d.setTextColor(253,245,0); d.setFont("helvetica","bold"); d.setFontSize(18); d.text("ARMOR MARKET", 12, 16); }
+  d.setTextColor(255,255,255); d.setFont("helvetica","bold"); d.setFontSize(11);
+  d.text("INFORME DE RECEPCIÓN", W-12, 11, { align:"right" });
+  d.setFontSize(17); d.text("NOTA " + (doc || "—"), W-12, 20, { align:"right" });
+
+  d.setTextColor(30,30,30); d.setFontSize(10);
+  const info = [["Despacha:", I.origen || "—"], ["Recibe:", I.destino || "—"], ["Revisó:", I.reviso || "—"], ["Fecha:", I.fecha],
+                ["Piezas:", "llegaron " + I.piezasLlegaron + " de " + I.piezasNota + " (" + rows.length + " renglones)"]];
+  let y = 35;
+  info.forEach(([k,v]) => { d.setFont("helvetica","bold"); d.text(k, 12, y); d.setFont("helvetica","normal"); d.text(String(v), 38, y); y += 6; });
+  d.setFont("helvetica","bold"); d.setFontSize(15);
+  if(I.conforme){ d.setTextColor(30,140,70); d.text("CONFORME", W-12, 38, { align:"right" }); }
+  else { d.setTextColor(190,110,0); d.text("CON NOVEDADES", W-12, 38, { align:"right" }); }
+  d.setTextColor(30,30,30); d.setFontSize(10);
+  y += 2;
+
+  const titulo = (txt) => {
+    if(y > 265){ d.addPage(); y = 18; }
+    d.setFont("helvetica","bold"); d.setFontSize(12); d.setTextColor(30,30,30); d.text(txt, 12, y); y += 2;
+  };
+  const tabla = (head, body, anchos) => {
+    d.autoTable({ startY: y, margin:{ left:12, right:12 }, head:[head], body, styles:{ fontSize:8.5, cellPadding:1.6, valign:"middle" },
+      headStyles:{ fillColor:[253,245,0], textColor:20, fontStyle:"bold" }, alternateRowStyles:{ fillColor:[247,247,247] }, columnStyles: anchos });
+    y = d.lastAutoTable.finalY + 8;
+  };
+  const num = { halign:"center", cellWidth:16 };
+  if(I.conforme){
+    d.setFont("helvetica","normal"); d.setFontSize(11);
+    d.text("Llegó todo completo: " + rows.length + " renglones, " + I.piezasNota + " piezas. No hay nada que ajustar.", 12, y + 4); y += 12;
+  }
+  if(I.faltan.length){
+    titulo("Faltantes (" + I.faltan.length + ")  -  ajustar la nota");
+    tabla(["#","Código","Descripción","Nota","Llegó","Faltan"],
+      I.faltan.map((r,i)=>[i+1, r.code, r.desc, r.qty, r.got, r.qty - r.got]),
+      { 0:{cellWidth:9,halign:"center"}, 1:{cellWidth:24}, 3:num, 4:num, 5:Object.assign({fontStyle:"bold"}, num) });
+  }
+  if(I.sobran.length){
+    titulo("Sobrantes (" + I.sobran.length + ")");
+    tabla(["#","Código","Descripción","Nota","Llegó","Sobran"],
+      I.sobran.map((r,i)=>[i+1, r.code, r.desc, r.qty, r.got, r.got - r.qty]),
+      { 0:{cellWidth:9,halign:"center"}, 1:{cellWidth:24}, 3:num, 4:num, 5:Object.assign({fontStyle:"bold"}, num) });
+  }
+  if(I.fuera.length){
+    titulo("Códigos que no están en la nota (" + I.fuera.length + ")");
+    tabla(["Código leído","Lecturas"], I.fuera.map(f=>[f.code, f.veces]), { 1:{ halign:"center", cellWidth:26 } });
+  }
+  if(!I.conforme){
+    d.setFont("helvetica","normal"); d.setFontSize(10); d.setTextColor(60);
+    if(y > 262){ d.addPage(); y = 18; }
+    d.text("Renglones completos: " + I.completos.length + " de " + rows.length + ".", 12, y); y += 14;
+  }
+  if(y > 262){ d.addPage(); y = 24; }
+  d.setDrawColor(120); d.setTextColor(60); d.setFontSize(9);
+  d.line(12, y+8, 90, y+8); d.text("Revisó", 12, y+13);
+  d.line(120, y+8, 198, y+8); d.text("Recibió / supervisor", 120, y+13);
+
+  const n = d.getNumberOfPages();
+  for(let i = 1; i <= n; i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140);
+    d.text("Nota " + (doc || "—") + " · Informe de recepción · " + I.fecha + " · página " + i + " de " + n, W/2, 290, { align:"center" }); }
+  return d.output("blob");
+}
+
+// El PDF se prepara al abrir el resumen: así el botón comparte al instante
+// (el iPhone cancela el compartir si hay que esperar demasiado después del toque).
+let informeListo = null;
+const firmaInforme = () => doc + "|" + rows.map(r=>r.got).join(",") + "|" + JSON.stringify(unknown);
+async function prepararInforme(){
+  if(!window.SEDES_API) return;               // el PDF solo existe en la versión web
+  const f = firmaInforme();
+  if(informeListo && informeListo.firma === f) return;
+  try{ informeListo = { firma:f, blob: await crearInformePDF() }; }catch(e){ informeListo = null; }
+}
+function descargarArchivo(blob, nombre){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+async function copiarTexto(t){
+  try{ await navigator.clipboard.writeText(t); return true; }catch(e){ return false; }
+}
+$("btnCompartir").onclick = async ()=>{
+  const btn = $("btnCompartir"), msg = $("shareMsg");
+  const texto = textoResumen(), titulo = "Recepción nota " + (doc || "");
+  btn.disabled = true; msg.textContent = "";
+  try{
+    if(window.SEDES_API){
+      if(!informeListo || informeListo.firma !== firmaInforme()){ msg.textContent = "Preparando el PDF…"; await prepararInforme(); }
+      if(informeListo){
+        const nombre = "Recepcion_nota_" + (doc || "sin_numero").replace(/\W+/g,"_") + ".pdf";
+        const archivo = new File([informeListo.blob], nombre, { type:"application/pdf" });
+        if(navigator.canShare && navigator.canShare({ files:[archivo] })){
+          await navigator.share({ files:[archivo], title:titulo, text:texto });
+          msg.textContent = ""; return;
+        }
+        descargarArchivo(informeListo.blob, nombre);
+        msg.textContent = "PDF descargado. Compártelo en el grupo.";
+        return;
+      }
+    }
+    if(navigator.share){ await navigator.share({ title:titulo, text:texto }); msg.textContent = ""; return; }
+    msg.textContent = (await copiarTexto(texto)) ? "Mensaje copiado. Pégalo en el grupo." : "No se pudo compartir. Usa Copiar mensaje.";
+  }catch(e){
+    msg.textContent = (e && e.name === "AbortError") ? "" : "No se pudo compartir (" + (e && e.message ? e.message : e) + "). Usa Copiar mensaje.";
+  }finally{
+    btn.disabled = false;
+  }
+};
+
 $("btnCopiar").onclick = async ()=>{
   const t = textoResumen();
-  try{ await navigator.clipboard.writeText(t); $("btnCopiar").textContent = "Copiado"; setTimeout(()=>$("btnCopiar").textContent="Copiar resumen",1500); }
-  catch(e){ prompt("Copia el resumen:", t); }
+  try{ await navigator.clipboard.writeText(t); $("btnCopiar").textContent = "Copiado"; setTimeout(()=>$("btnCopiar").textContent="Copiar mensaje",1500); }
+  catch(e){ prompt("Copia el mensaje:", t); }
 };
 $("btnCsv").onclick = ()=>{
   let csv = "codigo;descripcion;facturado;recibido;diferencia\n";
@@ -1345,7 +1522,7 @@ $("btnCsv").onclick = ()=>{
 $("btnVolver").onclick = ()=>ir(2);
 $("btnNueva").onclick = ()=>{
   if(!confirm("¿Cerrar esta factura y empezar otra?")) return;
-  rows = []; unknown = {}; doc = ""; $("docNum").value = ""; $("docLabel").textContent = "sin factura";
+  rows = []; unknown = {}; doc = ""; docInfo = {}; $("docNum").value = ""; $("docLabel").textContent = "sin factura";
   $("tableBox").hidden = true; $("pasteArea").value = "";
   $("tab2").disabled = $("tab3").disabled = true;
   guardarSesion(); ir(1);
@@ -1355,7 +1532,7 @@ $("btnNueva").onclick = ()=>{
 (function(){
   const s = load("sesion", null);
   if(s && s.rows && s.rows.length){
-    doc = s.doc || ""; rows = s.rows; unknown = s.unknown || {}; uid = s.uid || (rows.length+1);
+    doc = s.doc || ""; rows = s.rows; unknown = s.unknown || {}; uid = s.uid || (rows.length+1); docInfo = s.docInfo || {};
     $("docNum").value = doc; $("docLabel").textContent = doc || "sin factura";
     pintarTabla(); pintarChequeo();
     const hechos = rows.reduce((a,r)=>a+r.got,0);
