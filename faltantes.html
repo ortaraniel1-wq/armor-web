@@ -36,10 +36,23 @@
   .tag.r{background:var(--rojo);color:#fff}
   .resumen{font-size:13px;color:#555}
   #carga{padding:40px;text-align:center;color:#666}
+  #login{position:fixed;inset:0;z-index:50;background:var(--dark);display:flex;align-items:center;justify-content:center}
+  #login form{background:#fff;border-radius:16px;padding:26px;width:300px;text-align:center}
+  #login h2{margin:0 0 6px;font-size:18px}
+  #login input{width:100%;font-size:22px;letter-spacing:6px;text-align:center;padding:10px;border:1px solid var(--borde);border-radius:10px;margin:12px 0}
+  #login button{width:100%;padding:11px;font-size:15px}
+  #login .err{color:var(--rojo);font-size:13px;min-height:18px;margin-top:8px}
   @media print{.barra,header button,.noprint{display:none!important} body{background:#fff} th{position:static}}
 </style>
 </head>
 <body>
+<div id="login"><form id="fpin">
+  <h2>Faltantes <span style="color:#c9a000">Boleíta</span></h2>
+  <div style="font-size:13px;color:#666">Uso interno · escribe el PIN</div>
+  <input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" autofocus>
+  <button class="am" type="submit">Entrar</button>
+  <div class="err" id="perr"></div>
+</form></div>
 <header>
   <h1>Faltantes <span>Boleíta</span> · pedido entre sedes</h1>
   <div class="act" id="act">Cargando…</div>
@@ -59,6 +72,7 @@
     <button class="am" onclick="exportPedido()">⬇ Pedido (Excel)</button>
     <button onclick="exportNovedades()">⬇ Novedades de inventario</button>
     <button onclick="window.print()">🖨 Imprimir</button>
+    <button id="cerrar" title="Cerrar sesión en este equipo">🔒 Salir</button>
     <button onclick="limpiar()" title="Borra las cantidades físicas cargadas en este equipo">Reiniciar</button>
     <span class="resumen" id="resumen"></span>
   </div>
@@ -261,7 +275,26 @@ function alertaSuave(t){ const r=document.getElementById('resumen'); r.textConte
 
 document.getElementById('q').oninput = pintar;
 document.getElementById('origen').onchange = ()=>{ pintarRubros(); pintar(); };
-cargar().catch(e=>{ document.getElementById('carga').textContent = '⚠ ' + e.message; });
+/* ===== PIN ===== (para cambiarlo pídele a Claude un hash nuevo) */
+const PIN_HASH = '79dfa3e0a4249e6eef79728e7190fe1eb9fc8cbd5f7be2b2f09694b2c7ac849e';
+async function hash(t){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('armor-faltantes:' + t));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function arrancar(){
+  document.getElementById('login').remove();
+  cargar().catch(e=>{ document.getElementById('carga').textContent = '⚠ ' + e.message; });
+}
+let okGuardado = false; try { okGuardado = localStorage.getItem('falt_ok') === PIN_HASH; } catch(e){}
+if (okGuardado) arrancar();
+const fpin = document.getElementById('fpin');
+if (fpin) fpin.onsubmit = async e=>{
+  e.preventDefault();
+  const v = document.getElementById('pin').value.trim();
+  if (await hash(v) === PIN_HASH){ try{ localStorage.setItem('falt_ok', PIN_HASH) }catch(e){} arrancar(); }
+  else { document.getElementById('perr').textContent = 'PIN incorrecto'; document.getElementById('pin').value=''; }
+};
+document.getElementById('cerrar').onclick = ()=>{ try{ localStorage.removeItem('falt_ok') }catch(e){} location.reload(); };
 </script>
 </body>
 </html>
