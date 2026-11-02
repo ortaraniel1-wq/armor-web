@@ -377,26 +377,31 @@ async function crearPDF(p, origen){
   const {jsPDF}=window.jspdf, d=new jsPDF({unit:'mm', format:'a4'}), W=210;
   const sede=NOMBRE[p.sede]||p.sede, para=NOMBRE[origen]||origen;
   const lst=p.items.filter(i=>i.origen===origen), unidades=lst.reduce((s,i)=>s+Number(i.cantidad),0);
+  const nroCot=mapa(p.nro_cotizacion)[origen]||'';
+  const asig=i=> (i.asignada===''||i.asignada==null) ? Number(i.cantidad) : Number(i.asignada);
+  const uAsig=lst.reduce((s,i)=>s+asig(i),0);
   d.setFillColor(27,27,27); d.rect(0,0,W,24,'F');
   d.setTextColor(255,205,17); d.setFont('helvetica','bold'); d.setFontSize(18); d.text('ARMOR MARKET',12,15);
-  d.setTextColor(255,255,255); d.setFontSize(11); d.text('PEDIDO ENTRE SEDES',W-12,11,{align:'right'});
-  d.setFontSize(16); d.text(p.numero,W-12,19,{align:'right'});
+  d.setTextColor(255,255,255); d.setFontSize(11);
+  if (nroCot){ d.text(`PEDIDO ${p.numero}`,W-12,10,{align:'right'}); d.setFontSize(16); d.text(`COTIZACIÓN ${nroCot}`,W-12,19,{align:'right'}); }
+  else { d.text('PEDIDO ENTRE SEDES',W-12,11,{align:'right'}); d.setFontSize(16); d.text(p.numero,W-12,19,{align:'right'}); }
   d.setTextColor(30,30,30); d.setFontSize(10);
-  const info=[['Sede que pide:',sede],['Para:',para],['Solicitado por:',p.creado_por||''],['Fecha:',p.fecha||''],['Productos:',`${lst.length}  (${unidades} unidades)`]];
+  const info=[['Sede que pide:',sede],['Para:',para],['Solicitado por:',p.creado_por||''],['Fecha:',p.fecha||''],['Productos:',`${lst.length}  (${unidades} unidades solicitadas)`], ...(nroCot?[['Cotización:',`${nroCot}  (${uAsig} unidades asignadas)`]]:[])];
   let y=33; info.forEach(([a,b])=>{ d.setFont('helvetica','bold'); d.text(a,12,y); d.setFont('helvetica','normal'); d.text(String(b),45,y); y+=6; });
   if (p.estado==='Anulado'){ d.setTextColor(198,40,40); d.setFont('helvetica','bold'); d.setFontSize(14); d.text('ANULADO',W-12,33,{align:'right'}); d.setTextColor(30,30,30); }
   d.autoTable({startY:y+2, margin:{left:12,right:12},
-    head:[['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Cant.']],
-    body:lst.map((i,k)=>[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.cantidad]),
+    head:[nroCot?['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Solic.','Asig.']:['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Cant.']],
+    body:lst.map((i,k)=>nroCot?[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.cantidad,asig(i)]:[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.cantidad]),
     styles:{fontSize:8.5,cellPadding:1.6,valign:'middle'},
     headStyles:{fillColor:[255,205,17],textColor:20,fontStyle:'bold'},
-    columnStyles:{0:{cellWidth:8,halign:'center'},1:{cellWidth:27},2:{cellWidth:28},4:{cellWidth:24},5:{cellWidth:13,halign:'center',fontStyle:'bold'}},
+    columnStyles: nroCot ? {0:{cellWidth:8,halign:'center'},1:{cellWidth:24},2:{cellWidth:27},4:{cellWidth:22},5:{cellWidth:12,halign:'center'},6:{cellWidth:12,halign:'center',fontStyle:'bold'}}
+                         : {0:{cellWidth:8,halign:'center'},1:{cellWidth:27},2:{cellWidth:28},4:{cellWidth:24},5:{cellWidth:13,halign:'center',fontStyle:'bold'}},
     alternateRowStyles:{fillColor:[247,247,247]}});
   const n=d.getNumberOfPages();
-  for (let i=1;i<=n;i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140); d.text(`${p.numero} · ${sede} → ${para} · página ${i} de ${n}`,W/2,290,{align:'center'}); }
+  for (let i=1;i<=n;i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140); d.text(`${p.numero}${nroCot?' · cotización '+nroCot:''} · ${sede} a ${para} · página ${i} de ${n}`,W/2,290,{align:'center'}); }
   return d.output('blob');
 }
-function nombrePDF(p,o){ return `Pedido_${p.numero}_${sinAcento(NOMBRE[p.sede]||p.sede)}_para_${sinAcento(NOMBRE[o]||o)}.pdf` }
+function nombrePDF(p,o){ const c=mapa(p.nro_cotizacion)[o]; return `${c?'Cotizacion_'+sinAcento(c)+'_':'Pedido_'}${p.numero}_${sinAcento(NOMBRE[p.sede]||p.sede)}_para_${sinAcento(NOMBRE[o]||o)}.pdf` }
 async function pdfsDe(p){
   const ors=[...new Set(p.items.map(i=>i.origen))];
   return Promise.all(ors.map(async o=>({o, nombre:nombrePDF(p,o), blob:await crearPDF(p,o)})));
