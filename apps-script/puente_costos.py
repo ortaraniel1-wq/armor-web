@@ -15,7 +15,7 @@ import json, sys, urllib.request, datetime
 SEDE      = "BOLEITA"          # BOLEITA | CHAG | GUAIRA
 SERVIDOR  = "SERVERMCH"        # servidor SQL de esta sede (el mismo del puente del catálogo)
 BASE      = "BOLEITA"          # base de datos de Profit de esta sede
-USUARIO   = "sa"               # usuario SQL (el mismo que usa el puente del catálogo)
+USUARIO   = ""                 # usuario SQL. VACÍO = usa la sesión de Windows (como muchos puentes)
 CLAVE     = "CAMBIAR"
 API_URL   = "PEGAR_URL_/exec_DEL_APPS_SCRIPT"
 TOKEN     = "PEGAR_TOKEN_PUENTE"   # sale al ejecutar "configurar" en el Apps Script
@@ -34,8 +34,9 @@ def leer_costos():
     import pyodbc
     drivers = [d for d in pyodbc.drivers() if "SQL Server" in d]
     driver = next((d for d in drivers if "ODBC Driver" in d), drivers[0] if drivers else "SQL Server")
+    auth = f"UID={USUARIO};PWD={CLAVE}" if USUARIO else "Trusted_Connection=yes"
     cn = pyodbc.connect(
-        f"DRIVER={{{driver}}};SERVER={SERVIDOR};DATABASE={BASE};UID={USUARIO};PWD={CLAVE};TrustServerCertificate=yes",
+        f"DRIVER={{{driver}}};SERVER={SERVIDOR};DATABASE={BASE};{auth};TrustServerCertificate=yes",
         timeout=20)
     try:
         cur = cn.cursor()
