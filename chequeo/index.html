@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B2127">
+<title>Chequeo de facturas — Armor Market</title>
+<link rel="manifest" href="manifest.json">
+<meta name="robots" content="noindex,nofollow">
+<script src="../faltantes-config.js" onerror="void 0"></script>
+<style>
+  :root{
+    --ink:#1B2127;
+    --panel:#252D35;
+    --panel-2:#2E3840;
+    --edge:#3E4A55;
+    --paper:#EDEFF1;
+    --dim:#96A3AE;
+    --ok:#3FA34D;
+    --alert:#E8A317;
+    --stop:#D8452F;
+    --mono:"IBM Plex Mono",ui-monospace,"Roboto Mono","Courier New",monospace;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink);color:var(--paper);font-family:var(--sans);
+    font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  button{font-family:inherit;font-size:1rem}
+  :focus-visible{outline:3px solid var(--alert);outline-offset:2px}
+
+  /* clave de acceso (solo cuando la app está publicada en la web) */
+  body.chq-bloqueado header, body.chq-bloqueado nav, body.chq-bloqueado main{display:none}
+  #chqLogin{max-width:420px;margin:10vh auto 0;padding:1.2rem}
+  #chqLogin[hidden]{display:none}
+  #chqLogin h2{margin:0 0 .2rem;font-size:1.3rem}
+  .chq-sedes{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:.9rem 0}
+  .chq-sedes button{padding:.8rem .4rem;background:var(--panel-2);color:var(--paper);border:1px solid var(--edge);border-radius:6px}
+  .chq-sedes button.on{background:var(--alert);color:#1B2127;border-color:var(--alert);font-weight:700}
+  #chqErr{color:#ff8a78;min-height:1.4em;font-size:.9rem;margin-top:.5rem}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+  header{
+    display:flex;align-items:center;justify-content:space-between;gap:.5rem;
+    padding:.7rem .9rem;background:var(--panel);border-bottom:1px solid var(--edge);
+    position:sticky;top:0;z-index:20;
+  }
+  header h1{margin:0;font-size:1rem;font-weight:600;letter-spacing:.01em}
+  header .doc{font-family:var(--mono);font-size:.78rem;color:var(--dim)}
+
+  nav{display:flex;background:var(--panel-2);border-bottom:1px solid var(--edge);position:sticky;top:49px;z-index:19}
+  nav button{
+    flex:1;background:none;border:0;color:var(--dim);padding:.65rem .3rem;
+    font-weight:500;border-bottom:3px solid transparent;cursor:pointer;
+  }
+  nav button[aria-current="true"]{color:var(--paper);border-bottom-color:var(--alert)}
+  nav button:disabled{opacity:.35}
+
+  main{padding:.9rem}
+  section[hidden]{display:none}
+  h2{font-size:1.05rem;margin:0 0 .3rem}
+  p.note{color:var(--dim);font-size:.88rem;margin:.2rem 0 1rem;max-width:60ch}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
+    background:var(--panel-2);color:var(--paper);border:1px solid var(--edge);
+    border-radius:6px;padding:.8rem 1rem;font-weight:600;cursor:pointer;width:100%;
+  }
+  .btn:active{background:var(--edge)}
+  .btn.primary{background:var(--alert);color:#20170A;border-color:var(--alert)}
+  .btn.go{background:var(--ok);color:#06210B;border-color:var(--ok)}
+  .btn.ghost{background:none}
+  .btn.sm{padding:.5rem .7rem;font-size:.85rem;width:auto}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .row{display:flex;gap:.55rem;margin-bottom:.55rem}
+  .row>*{flex:1}
+
+  .drop{
+    border:2px dashed var(--edge);border-radius:8px;padding:1.2rem;text-align:center;
+    color:var(--dim);margin-bottom:.9rem;
+  }
+  textarea,input[type=text],input[type=number],input[type=search],input[type=password]{
+    width:100%;background:var(--panel);color:var(--paper);border:1px solid var(--edge);
+    border-radius:6px;padding:.6rem;font-family:var(--mono);font-size:.95rem;
+  }
+  textarea{min-height:130px;line-height:1.35}
+
+  .bar{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;margin:.7rem 0}
+  .bar i{display:block;height:100%;background:var(--alert);width:0;transition:width .2s}
+  .status{font-family:var(--mono);font-size:.82rem;color:var(--dim);min-height:1.2em}
+
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th{text-align:left;color:var(--dim);font-weight:500;font-size:.75rem;padding:.35rem .3rem;border-bottom:1px solid var(--edge)}
+  td{padding:.3rem;border-bottom:1px solid var(--panel-2);vertical-align:top}
+  td input{padding:.35rem;font-size:.82rem}
+  td.qty{width:64px}
+  td.code{width:96px}
+  td.del{width:34px}
+  .icon-btn{background:none;border:0;color:var(--dim);font-size:1.1rem;cursor:pointer;padding:.2rem .35rem}
+
+  /* ---- pantalla de chequeo ---- */
+  .signal{
+    border-radius:8px;padding:1rem;margin-bottom:.8rem;background:var(--panel);
+    border-left:6px solid var(--edge);min-height:104px;
+  }
+  .signal.ok{background:#1E3A23;border-left-color:var(--ok)}
+  .signal.dup{background:#3B3117;border-left-color:var(--alert)}
+  .signal.bad{background:#3B1E18;border-left-color:var(--stop)}
+  .signal .verdict{font-size:1.25rem;font-weight:700;margin:0 0 .15rem}
+  .signal .what{font-size:.92rem;margin:0;color:#DDE3E8}
+  .signal .count{font-family:var(--mono);font-size:1.6rem;font-weight:600;margin-top:.3rem}
+
+  .tally{display:flex;gap:.5rem;margin-bottom:.8rem}
+  .tally div{flex:1;background:var(--panel);border:1px solid var(--edge);border-radius:6px;padding:.5rem;text-align:center}
+  .tally b{display:block;font-family:var(--mono);font-size:1.3rem;line-height:1.1}
+  .tally span{font-size:.7rem;color:var(--dim)}
+
+  .toggle{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--dim);margin:.2rem 0 .8rem}
+  .toggle input{width:1.15rem;height:1.15rem;accent-color:var(--alert)}
+
+  #wedge{position:absolute;left:-9999px;opacity:0;height:1px;width:1px}
+
+  ul.items{list-style:none;padding:0;margin:.5rem 0 0}
+  ul.items li{
+    display:flex;align-items:center;gap:.6rem;padding:.55rem .6rem;border:1px solid var(--edge);
+    border-radius:6px;margin-bottom:.4rem;background:var(--panel);
+  }
+  ul.items li.done{opacity:.5;border-color:var(--ok)}
+  ul.items li.over{border-color:var(--alert)}
+  ul.items .desc{flex:1;min-width:0}
+  ul.items .desc b{display:block;font-weight:500;font-size:.9rem;overflow-wrap:anywhere}
+  ul.items .desc small{color:var(--dim);font-family:var(--mono);font-size:.74rem}
+  ul.items .n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+  ul.items .n.full{color:var(--ok)}
+  ul.items .n.over{color:var(--alert)}
+
+  #cam{width:100%;border-radius:8px;background:#000;display:block}
+  .camwrap{margin-bottom:.8rem}
+
+  .lead{font-size:1.4rem;font-family:var(--mono);font-weight:600}
+  .group{margin-bottom:1.4rem}
+  .group h3{font-size:.9rem;margin:0 0 .4rem;font-weight:600}
+  .group h3 em{font-style:normal;color:var(--dim);font-weight:400}
+  .empty{color:var(--dim);font-size:.88rem;padding:.6rem 0}
+  .btn.grande{width:100%;font-size:1.3rem;font-weight:700;padding:1.1rem .8rem;margin-bottom:.2rem}
+  dialog{background:var(--panel);color:var(--paper);border:1px solid var(--edge);border-radius:8px;max-width:92vw;width:420px}
+  dialog::backdrop{background:rgba(0,0,0,.7)}
+</style>
+</head>
+<body>
+
+<div id="chqLogin" hidden><form id="chqForm">
+  <h2>Chequeo de facturas</h2>
+  <p class="note">Elige tu sede y escribe tu PIN.</p>
+  <div class="chq-sedes" id="chqSedes">
+    <button type="button" data-s="BOLEITA">Boleíta</button>
+    <button type="button" data-s="CHAG">Chaguaramos</button>
+    <button type="button" data-s="GUAIRA">La Guaira</button>
+    <button type="button" data-s="ADMIN">Administración</button>
+  </div>
+  <input type="text" id="chqNom" placeholder="Tu nombre" maxlength="40" autocomplete="name" style="font-family:var(--sans)">
+  <input type="password" id="chqPin" placeholder="PIN" inputmode="numeric" maxlength="8" autocomplete="off" style="font-family:var(--mono);letter-spacing:.4rem;text-align:center">
+  <button class="btn go grande" type="submit" id="chqEntrar" style="margin-top:.6rem">Entrar</button>
+  <div id="chqErr"></div>
+</form></div>
+<script>if(window.SEDES_API) document.body.classList.add("chq-bloqueado");</script>
+
+<header>
+  <h1>Chequeo de facturas</h1>
+  <span class="doc" id="docLabel">sin factura</span>
+  <button class="icon-btn" id="chqSalir" hidden style="font-size:.8rem"></button>
+</header>
+
+<nav>
+  <button id="tab1" aria-current="true">1 · Cargar</button>
+  <button id="tab2" disabled>2 · Chequear</button>
+  <button id="tab3" disabled>3 · Resumen</button>
+</nav>
+
+<main>
+
+<!-- ============ 1. CARGAR ============ -->
+<section id="s1">
+  <h2>Cargar la factura</h2>
+  <p class="note">Sube el PDF de la nota de entrega o de la factura (el que imprime Profit) y la app lee los renglones.</p>
+
+  <div class="drop">
+    <button class="btn go grande" id="btnPdf">Subir PDF</button>
+    <div class="row">
+      <button class="btn" id="btnFoto">Tomar foto</button>
+      <button class="btn" id="btnArchivo">Elegir imagen</button>
+    </div>
+    <button class="btn ghost" id="btnTexto">Pegar el texto de la factura</button>
+  </div>
+
+  <details style="margin:.9rem 0">
+    <summary class="note" id="catResumen">Catálogo de códigos de barras: no cargado</summary>
+    <p class="note">La app baja sola, una vez al día, la lista de productos con sus códigos de barras de las tres sedes (Chaguaramos, Boleita y La Guaira). También puedes actualizarla ahora.</p>
+    <button class="btn" id="btnCatAct">Actualizar catálogo ahora</button>
+    <div class="status" id="catMsg"></div>
+    <button class="btn ghost sm" id="btnCatalogo" style="width:100%;margin-top:.5rem">Cargar un archivo CSV (codigo,barra)</button>
+    <input type="file" id="fileCat" accept=".csv,.txt,text/csv,text/plain" hidden>
+  </details>
+
+  <details id="profitBloque" style="margin:.9rem 0">
+    <summary class="note">Buscar por número en Profit (requiere la conexión al servidor)</summary>
+    <div class="drop">
+      <input type="text" id="profitNum" inputmode="numeric" autocomplete="off" placeholder="N° de factura (ej. 40165747)" style="font-family:var(--mono);font-size:1.2rem">
+      <button class="btn" id="btnProfit">Buscar en Profit</button>
+      <div class="status" id="profitMsg"></div>
+      <details style="margin-top:.6rem">
+        <summary class="note">Ajustes de conexión</summary>
+        <input type="text" id="cfgUrl" placeholder="Dirección de la API (vacío si abriste la app desde el servidor)" style="font-family:var(--mono)">
+        <input type="password" id="cfgToken" placeholder="Token de acceso" style="font-family:var(--mono)">
+        <button class="btn ghost sm" id="btnCfg" style="width:100%">Guardar ajustes</button>
+      </details>
+    </div>
+  </details>
+
+  <input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
+  <input type="file" id="fileLib" accept="image/*" hidden>
+  <input type="file" id="filePdf" accept="application/pdf,.pdf" hidden>
+
+  <div id="ocrBox" hidden>
+    <div class="bar"><i id="ocrBar"></i></div>
+    <div class="status" id="ocrStatus"></div>
+  </div>
+
+  <div id="pasteBox" hidden>
+    <textarea id="pasteArea" placeholder="Pega aquí los renglones: código, descripción y cantidad"></textarea>
+    <div class="row" style="margin-top:.55rem">
+      <button class="btn go" id="btnParsePaste">Leer renglones</button>
+      <button class="btn ghost" id="btnCancelPaste">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="tableBox" hidden>
+    <div class="row" style="align-items:center;margin-bottom:.3rem">
+      <label style="flex:2">
+        <input type="text" id="docNum" placeholder="N° de factura o nota" style="font-family:var(--sans)">
+      </label>
+      <button class="btn sm ghost" id="btnAddRow" style="flex:0 0 auto">+ Renglón</button>
+    </div>
+    <p class="note" id="rowCount"></p>
+    <table>
+      <thead><tr><th>Código</th><th>Descripción</th><th>Cant.</th><th></th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="row" style="margin-top:.9rem">
+      <button class="btn go" id="btnEmpezar">Empezar chequeo</button>
+    </div>
+    <button class="btn ghost sm" id="btnBorrarTodo" style="margin-top:.5rem;width:100%">Descartar y cargar otra factura</button>
+  </div>
+</section>
+
+<!-- ============ 2. CHEQUEAR ============ -->
+<section id="s2" hidden>
+  <div class="signal" id="signal">
+    <p class="verdict" id="sigVerdict">Listo para escanear</p>
+    <p class="what" id="sigWhat">Dispara el lector o busca el producto por descripción.</p>
+    <div class="count" id="sigCount"></div>
+  </div>
+
+  <div class="tally">
+    <div><b id="tOk">0</b><span>completos</span></div>
+    <div><b id="tFalta">0</b><span>faltan</span></div>
+    <div><b id="tNovedad">0</b><span>novedades</span></div>
+  </div>
+
+  <label class="toggle">
+    <input type="checkbox" id="modoPda">
+    Modo PDA — el lector láser escribe directo, sin teclado en pantalla
+  </label>
+  <input id="wedge" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+  <div class="row">
+    <button class="btn" id="btnCam">Escanear con la cámara</button>
+  </div>
+  <div class="camwrap" id="camWrap" hidden>
+    <video id="cam" playsinline muted></video>
+    <button class="btn ghost sm" id="btnCamStop" style="width:100%;margin-top:.4rem">Cerrar cámara</button>
+  </div>
+
+  <input type="search" id="buscar" placeholder="Buscar por descripción, código o código de barras" style="font-family:var(--sans)">
+  <ul class="items" id="lista"></ul>
+
+  <div class="row" style="margin-top:1rem">
+    <button class="btn primary" id="btnCerrar">Cerrar chequeo</button>
+  </div>
+</section>
+
+<!-- ============ 3. RESUMEN ============ -->
+<section id="s3" hidden>
+  <h2 id="resTitulo">Resumen</h2>
+  <p class="note" id="resNota"></p>
+
+  <div class="group" id="gFalta"></div>
+  <div class="group" id="gSobra"></div>
+  <div class="group" id="gDesconocido"></div>
+  <div class="group" id="gOk"></div>
+
+  <div class="row">
+    <button class="btn" id="btnCopiar">Copiar resumen</button>
+    <button class="btn" id="btnCsv">Descargar CSV</button>
+  </div>
+  <button class="btn ghost" id="btnVolver" style="margin-top:.5rem">Volver al chequeo</button>
+  <button class="btn ghost" id="btnNueva" style="margin-top:.5rem">Nueva factura</button>
+</section>
+
+</main>
+
+<dialog id="dlgAsignar">
+  <div style="padding:1rem">
+    <h2 style="margin-top:0">Código no está en la factura</h2>
+    <p class="note" id="dlgCode"></p>
+    <input type="search" id="dlgBuscar" placeholder="Buscar el renglón al que pertenece" style="font-family:var(--sans)">
+    <ul class="items" id="dlgLista" style="max-height:40vh;overflow:auto"></ul>
+    <div class="row">
+      <button class="btn ghost" id="dlgSobrante">Marcar como novedad</button>
+      <button class="btn ghost" id="dlgCerrar">Cancelar</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlgCantidad">
+  <div style="padding:1rem">
+    <h2 id="dlgcTitulo" style="margin-top:0;font-size:1.1rem;line-height:1.3">Producto</h2>
+    <p class="note" id="dlgcCode"></p>
+    <button class="btn go grande" id="dlgcCompleto">Llegó completo · <span id="dlgcQty">0</span></button>
+    <p class="note" style="margin:.9rem 0 .4rem">¿Llegó parcial? Escribe cuántos llegaron:</p>
+    <div class="row">
+      <input type="number" id="dlgcNum" min="0" inputmode="numeric" placeholder="0" style="font-size:1.6rem;text-align:center;font-family:var(--mono)">
+      <button class="btn" id="dlgcGuardar" style="flex:0 0 42%">Guardar</button>
+    </div>
+    <button class="btn ghost" id="dlgcCancelar" style="width:100%">Cancelar</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+/* ---------- estado ---------- */
+let doc = "";
+let rows = [];          // {id, code, bar, desc, qty, got}
+let unknown = {};       // codigo -> veces
+let aliases = load("alias_codigos", {});   // codigo escaneado -> id de renglón (por código de factura)
+let uid = 1;
+
+/* ---------- catálogo de códigos de barras (código interno de Profit <-> barra) ---------- */
+const sinCerosG = s => String(s||"").trim().toUpperCase().replace(/[\s\-_.]/g,"").replace(/^0+/, "");
+let catalogo = prepararCatalogo(load("catalogo", null));
+function prepararCatalogo(c){
+  if(!c || !c.porBarra) return null;
+  c.rev = {};
+  for(const k in c.porBarra){ const v = c.porBarra[k]; (c.rev[v[0]] = c.rev[v[0]] || []).push(v[1]); }
+  return c;
+}
+// todos los códigos de barras conocidos de un renglón: los de la factura (API) + los del catálogo
+function barrasDe(r){
+  const out = (r.barras && r.barras.length ? r.barras : [r.bar]).filter(Boolean);
+  if(catalogo) (catalogo.rev[String(r.code||"").trim().toUpperCase().replace(/[\s\-_.]/g,"")] || []).forEach(b=>out.push(b));
+  return out;
+}
+
+function load(k, def){ try{ return JSON.parse(localStorage.getItem(k)) ?? def; }catch(e){ return def; } }
+function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function guardarSesion(){ save("sesion", {doc, rows, unknown, uid}); }
+function $(id){ return document.getElementById(id); }
+
+/* ---------- clave de acceso: solo en la versión publicada en la web ----------
+   Reutiliza el login de "Pedidos entre sedes" (Apps Script, acción 'entrar'): sede + nombre + PIN. */
+(function(){
+  const API = window.SEDES_API;
+  if(!API) return;                       // en el servidor local no hay Apps Script: sin clave
+  const NOMBRE = {BOLEITA:"Boleíta", CHAG:"Chaguaramos", GUAIRA:"La Guaira", ADMIN:"Administración"};
+  let sel = "";
+  const llamar = s => fetch(API, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" },
+    body: JSON.stringify({ accion:"entrar", sede:s.sede, pin:s.pin, por:s.por }) }).then(r => r.json());
+
+  function abrir(s){
+    document.body.classList.remove("chq-bloqueado");
+    $("chqLogin").hidden = true;
+    $("chqSalir").hidden = false;
+    $("chqSalir").textContent = "Salir · " + (NOMBRE[s.sede] || s.sede);
+    $("profitBloque").hidden = true;     // la búsqueda en Profit solo existe en el servidor de la tienda
+  }
+  function pedir(msg){ $("chqLogin").hidden = false; $("chqErr").textContent = msg || ""; }
+
+  document.querySelectorAll("#chqSedes button").forEach(b => b.onclick = ()=>{
+    sel = b.dataset.s;
+    document.querySelectorAll("#chqSedes button").forEach(x => x.classList.toggle("on", x === b));
+    $("chqPin").focus();
+  });
+  $("chqSalir").onclick = ()=>{ save("chq_ses", null); location.reload(); };
+  $("chqForm").onsubmit = async e => {
+    e.preventDefault(); $("chqErr").textContent = "";
+    const pin = $("chqPin").value.trim(), por = $("chqNom").value.trim();
+    if(!sel) return void($("chqErr").textContent = "Elige tu sede.");
+    if(!por) return void($("chqErr").textContent = "Escribe tu nombre.");
+    if(!pin) return void($("chqErr").textContent = "Escribe el PIN.");
+    $("chqEntrar").disabled = true; $("chqEntrar").textContent = "Verificando…";
+    try{
+      const s = { sede:sel, pin, por };
+      const j = await llamar(s);
+      if(!j.ok) throw new Error(j.error || "PIN incorrecto.");
+      save("chq_ses", s);
+      $("chqPin").value = "";
+      abrir(s);
+    }catch(err){
+      $("chqErr").textContent = (err instanceof TypeError) ? "No hay conexión para verificar el PIN." : err.message;
+    }
+    $("chqEntrar").disabled = false; $("chqEntrar").textContent = "Entrar";
+  };
+
+  const guardada = load("chq_ses", null);
+  if(guardada && guardada.sede && guardada.pin){
+    abrir(guardada);                      // entra al instante; sin internet también funciona
+    llamar(guardada).then(j => { if(!j.ok){ save("chq_ses", null); location.reload(); } }).catch(()=>{});
+  } else {
+    pedir("");
+  }
+})();
+
+/* ---------- utilidades ---------- */
+const norm = s => String(s||"").trim().toUpperCase().replace(/[\s\-_.]/g,"");
+const limpiar = s => String(s||"").replace(/\s+/g," ").trim();
+
+function numVe(t){
+  if(!t) return null;
+  let s = String(t).replace(/[^\d.,]/g,"");
+  if(!s) return null;
+  if(s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  else if((s.match(/\./g)||[]).length > 1) s = s.replace(/\./g,"");
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function beep(tipo){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = tipo==="ok" ? 880 : tipo==="dup" ? 620 : 220;
+    o.type = "square";
+    g.gain.setValueAtTime(.06, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + (tipo==="bad"?.35:.12));
+    o.start(); o.stop(ctx.currentTime + (tipo==="bad"?.35:.12));
+    setTimeout(()=>ctx.close(), 600);
+  }catch(e){}
+  if(navigator.vibrate) navigator.vibrate(tipo==="ok"?40:tipo==="dup"?[30,40,30]:[80,60,80]);
+}
+
+/* ---------- navegación ---------- */
+function ir(n){
+  [1,2,3].forEach(i=>{ $("s"+i).hidden = (i!==n); $("tab"+i).setAttribute("aria-current", i===n); });
+  window.scrollTo(0,0);
+  if(n===2) setTimeout(enfocarWedge, 100);
+  if(n===3) pintarResumen();
+}
+$("tab1").onclick = ()=>ir(1);
+$("tab2").onclick = ()=>{ if(rows.length) ir(2); };
+$("tab3").onclick = ()=>{ if(rows.length) ir(3); };
+
+/* ---------- 1. entrada de la factura ---------- */
+$("btnFoto").onclick = ()=> $("fileCam").click();
+$("btnArchivo").onclick = ()=> $("fileLib").click();
+$("fileCam").onchange = e => { if(e.target.files[0]) leerImagen(e.target.files[0]); };
+$("fileLib").onchange = e => { if(e.target.files[0]) leerImagen(e.target.files[0]); };
+
+/* --- factura desde Profit (API) --- */
+$("cfgUrl").value = load("api_url", "");
+$("cfgToken").value = load("api_token", "");
+$("btnCfg").onclick = ()=>{
+  save("api_url", $("cfgUrl").value.trim().replace(/\/+$/,""));
+  save("api_token", $("cfgToken").value.replace(/[^\x21-\x7E]/g, ""));
+  $("profitMsg").textContent = "Ajustes guardados.";
+};
+$("profitNum").addEventListener("keydown", e=>{ if(e.key === "Enter"){ e.preventDefault(); $("btnProfit").click(); } });
+
+$("btnProfit").onclick = async ()=>{
+  const num = $("profitNum").value.trim();
+  const msg = $("profitMsg");
+  if(!/^\d+$/.test(num)){ msg.textContent = "Escribe solo el número de factura."; return; }
+  if(rows.length && !confirm("Ya hay una factura cargada. ¿Reemplazarla?")) return;
+  msg.textContent = "Buscando…";
+  $("btnProfit").disabled = true;
+  try{
+    const base = load("api_url", "");
+    const res = await fetch(base + "/factura/" + num, { headers: { "X-Token": String(load("api_token", "")).replace(/[^\x21-\x7E]/g, "") } });
+    if(res.status === 401) throw new Error("Token incorrecto. Revisa los ajustes de conexión.");
+    if(res.status === 404){
+      let det = ""; try{ det = (await res.json()).detail || ""; }catch(e){}
+      throw new Error(det === "Factura no encontrada"
+        ? "No existe la factura " + num + "."
+        : "No se encontró la API. Revisa que \"Dirección de la API\" en los ajustes esté vacía o sea correcta.");
+    }
+    if(!res.ok) throw new Error("El servidor respondió con error (" + res.status + ").");
+    const data = await res.json();
+    const f = data.factura || {};
+    rows = (data.renglones || []).map(r => ({
+      id: uid++, code: r.codigo || "", bar: (r.barras && r.barras[0]) || "", barras: r.barras || [],
+      desc: r.descripcion || "", qty: Math.max(1, Math.round(Number(r.cantidad) || 1)), got: 0
+    }));
+    unknown = {};
+    doc = String(f.numero || num);
+    $("docNum").value = doc;
+    $("docLabel").textContent = doc + (f.cliente_nombre ? " · " + f.cliente_nombre : "");
+    pintarTabla();
+    msg.textContent = f.anulada ? "⚠ Esta factura está ANULADA." :
+      rows.length + (rows.length === 1 ? " renglón cargado" : " renglones cargados") +
+      (f.cliente_nombre ? " · " + f.cliente_nombre : "") + ".";
+  }catch(e){
+    msg.textContent = (e instanceof TypeError) ? "No se pudo conectar con el servidor (" + e.message + ")." : e.message;
+  }finally{
+    $("btnProfit").disabled = false;
+  }
+};
+
+/* --- catálogo de códigos de barras --- */
+const CAT_BASE = "https://raw.githubusercontent.com/ortaraniel1-wq/armor-catalogo-datos/main/";
+const CAT_ARCHIVOS = ["conteo_CHAG.json", "conteo_BOLEITA.json", "conteo_GUAIRA.json"];
+const normCodigo = s => String(s == null ? "" : s).trim().toUpperCase().replace(/[\s\-_.]/g, "");
+
+function pintarCatResumen(){
+  $("catResumen").textContent = catalogo
+    ? "Catálogo de códigos de barras: " + catalogo.n + " códigos · " + (catalogo.detalle || catalogo.fecha)
+    : "Catálogo de códigos de barras: no cargado";
+}
+function guardarCatalogo(porBarra, detalle){
+  const c = { ts: Date.now(), fecha: new Date().toLocaleString("es-VE"), n: Object.keys(porBarra).length, porBarra: porBarra, detalle: detalle };
+  let guardado = true;
+  try{ localStorage.setItem("catalogo", JSON.stringify(c)); }catch(err){ guardado = false; }
+  catalogo = prepararCatalogo(c);
+  pintarCatResumen();
+  if(rows.length) pintarChequeo();
+  return guardado;
+}
+
+async function actualizarCatalogo(silencioso){
+  const msg = $("catMsg"), btn = $("btnCatAct");
+  btn.disabled = true;
+  const porBarra = {};
+  let ultima = "";
+  try{
+    for(const nombre of CAT_ARCHIVOS){
+      msg.textContent = "Bajando " + nombre + "…";
+      const res = await fetch(CAT_BASE + nombre);
+      if(!res.ok) throw new Error(nombre + " respondió " + res.status);
+      const d = await res.json();
+      const ix = {}; (d.cols || []).forEach((c, i) => ix[c] = i);
+      if(ix.codigo == null || ix.barra == null) throw new Error(nombre + " no tiene las columnas esperadas");
+      (d.items || []).forEach(it => {
+        const cod = normCodigo(it[ix.codigo]);
+        if(!cod) return;
+        [["barra", false], ["ref", true]].forEach(([campo, soloNumerico]) => {
+          if(ix[campo] == null) return;
+          const v = String(it[ix[campo]] == null ? "" : it[ix[campo]]).trim();
+          if(!v || !/\d/.test(v)) return;
+          if(soloNumerico && !/^\d{6,}$/.test(v)) return;   // 'ref' solo vale si parece un código de barras
+          porBarra[sinCerosG(v)] = [cod, v];
+        });
+      });
+      if(d.actualizado) ultima = d.actualizado;
+    }
+    const ok = guardarCatalogo(porBarra, "actualizado " + (ultima || new Date().toLocaleDateString("es-VE")));
+    msg.textContent = ok ? "Catálogo al día." : "Catálogo cargado, pero es muy grande para guardarlo en este teléfono: se perderá al cerrar la app.";
+  }catch(e){
+    msg.textContent = (silencioso ? "No se pudo actualizar el catálogo solo (" : "No se pudo actualizar (") + e.message + ")." +
+      (catalogo ? " Se sigue usando el que ya estaba guardado." : "");
+  }finally{
+    btn.disabled = false;
+  }
+}
+$("btnCatAct").onclick = ()=> actualizarCatalogo(false);
+
+/* --- catálogo desde un archivo CSV (codigo,barra), por si no hay conexión --- */
+$("btnCatalogo").onclick = ()=> $("fileCat").click();
+$("fileCat").onchange = async e => {
+  const f = e.target.files[0];
+  if(!f) return;
+  const porBarra = {}; let n = 0;
+  (await f.text()).split(/\r?\n/).forEach(l=>{
+    const t = l.split(/[;,\t]/).map(x=>x.trim());
+    if(t.length < 2 || !t[0] || !t[1]) return;
+    const k = sinCerosG(t[1]);
+    if(!k || !/\d/.test(k)) return;              // salta la fila de encabezado
+    porBarra[k] = [normCodigo(t[0]), t[1]]; n++;
+  });
+  if(!n){ alert("No se reconoció ningún código. Cada línea debe ser: codigo,barra"); return; }
+  guardarCatalogo(porBarra, "archivo cargado " + new Date().toLocaleDateString("es-VE"));
+  e.target.value = "";
+};
+pintarCatResumen();
+// una vez al día, o si todavía no hay catálogo, se baja solo
+if(!catalogo || Date.now() - (catalogo.ts || 0) > 24*3600*1000) actualizarCatalogo(true);
+
+$("btnPdf").onclick = ()=> $("filePdf").click();
+$("filePdf").onchange = e => { if(e.target.files[0]) leerPDF(e.target.files[0]); };
+
+/* --- factura en PDF: primero el texto interno; si viene escaneada, OCR --- */
+const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+async function leerPDF(file){
+  $("ocrBox").hidden = false;
+  $("ocrBar").style.width = "5%";
+  $("ocrStatus").textContent = "Abriendo el PDF…";
+  try{
+    if(!window.pdfjsLib){
+      await cargarScript(PDFJS_URL);
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    }
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+
+    let texto = "";
+    for(let p = 1; p <= pdf.numPages; p++){
+      $("ocrStatus").textContent = "Leyendo página " + p + " de " + pdf.numPages + "…";
+      $("ocrBar").style.width = (5 + (p/pdf.numPages)*55) + "%";
+      const pag = await pdf.getPage(p);
+      const tc = await pag.getTextContent();
+      texto += reconstruirLineas(tc.items) + "\n";
+    }
+
+    let filas = parsear(texto);
+
+    // PDF escaneado (sin texto interno): pasamos las páginas por OCR
+    if(!filas.length && texto.replace(/\s/g,"").length < 60){
+      $("ocrStatus").textContent = "El PDF no trae texto, se va a leer como imagen…";
+      texto = await ocrDelPDF(pdf);
+      filas = parsear(texto);
+    }
+
+    $("ocrBox").hidden = true;
+    if(!filas.length){
+      if(confirm("No pude separar los renglones del PDF. ¿Quieres revisar el texto que sí leí y corregirlo a mano?")){
+        $("pasteBox").hidden = false;
+        $("pasteArea").value = texto;
+        $("pasteArea").focus();
+      }
+      return;
+    }
+    rows = filas;
+    pintarTabla();
+  }catch(err){
+    $("ocrStatus").textContent = "No se pudo leer el PDF: " + err.message;
+    $("ocrBar").style.width = "0";
+  }
+}
+
+// pdf.js entrega pedacitos sueltos de texto con su posición; los agrupamos
+// por renglón (misma altura) para recuperar las líneas de la factura.
+function reconstruirLineas(items){
+  const lineas = [];
+  items.forEach(it=>{
+    if(!it.str || !it.str.trim()) return;
+    const y = Math.round(it.transform[5]);
+    const x = it.transform[4];
+    let l = lineas.find(o=>Math.abs(o.y - y) <= 3);
+    if(!l){ l = { y: y, piezas: [] }; lineas.push(l); }
+    l.piezas.push({ x: x, t: it.str });
+  });
+  return lineas
+    .sort((a,b)=>b.y - a.y)
+    .map(l => limpiar(l.piezas.sort((a,b)=>a.x - b.x).map(p=>p.t).join(" ")))
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function ocrDelPDF(pdf){
+  if(!window.Tesseract) await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js");
+  let texto = "";
+  const tope = Math.min(pdf.numPages, 5);
+  for(let p = 1; p <= tope; p++){
+    const pag = await pdf.getPage(p);
+    const vp = pag.getViewport({ scale: 2 });
+    const c = document.createElement("canvas");
+    c.width = vp.width; c.height = vp.height;
+    await pag.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+    const res = await Tesseract.recognize(c, "spa", {
+      logger: m => {
+        if(m.status === "recognizing text"){
+          $("ocrBar").style.width = (60 + ((p-1+m.progress)/tope)*40) + "%";
+          $("ocrStatus").textContent = "Leyendo página " + p + " con OCR… " + Math.round(m.progress*100) + "%";
+        }
+      }
+    });
+    texto += res.data.text + "\n";
+  }
+  return texto;
+}
+
+$("btnTexto").onclick = ()=>{ $("pasteBox").hidden = false; $("pasteArea").focus(); };
+$("btnCancelPaste").onclick = ()=>{ $("pasteBox").hidden = true; };
+$("btnParsePaste").onclick = ()=>{
+  const r = parsear($("pasteArea").value);
+  if(!r.length){ alert("No se reconoció ningún renglón. Revisa que cada línea tenga código, descripción y cantidad."); return; }
+  rows = r; $("pasteBox").hidden = true; pintarTabla();
+};
+
+async function leerImagen(file){
+  $("ocrBox").hidden = false;
+  $("ocrStatus").textContent = "Preparando el lector…";
+  $("ocrBar").style.width = "5%";
+  try{
+    if(!window.Tesseract) await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js");
+    const img = await prepararImagen(file);
+    const res = await Tesseract.recognize(img, "spa", {
+      logger: m => {
+        if(m.status === "recognizing text"){
+          $("ocrBar").style.width = (10 + m.progress*90) + "%";
+          $("ocrStatus").textContent = "Leyendo la factura… " + Math.round(m.progress*100) + "%";
+        } else {
+          $("ocrStatus").textContent = m.status;
+        }
+      },
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNÑOPQRSTUVWXYZabcdefghijklmnñopqrstuvwxyz0123456789.,-/ "
+    });
+    const r = parsear(res.data.text);
+    $("ocrBox").hidden = true;
+    if(!r.length){
+      alert("No se pudo separar los renglones de la foto. Prueba con más luz y la factura plana, o pega el texto.");
+      return;
+    }
+    rows = r;
+    pintarTabla();
+  }catch(err){
+    $("ocrStatus").textContent = "No se pudo leer la imagen: " + err.message;
+    $("ocrBar").style.width = "0";
+  }
+}
+
+function cargarScript(src){
+  return new Promise((ok,fail)=>{
+    const s = document.createElement("script");
+    s.src = src; s.onload = ok; s.onerror = ()=>fail(new Error("sin conexión para cargar el lector"));
+    document.head.appendChild(s);
+  });
+}
+
+// Reduce y sube el contraste: el OCR trabaja mejor y el teléfono no se ahoga.
+function prepararImagen(file){
+  return new Promise(res=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const max = 1800;
+      const esc = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width*esc); c.height = Math.round(img.height*esc);
+      const x = c.getContext("2d");
+      x.drawImage(img, 0, 0, c.width, c.height);
+      const d = x.getImageData(0,0,c.width,c.height), p = d.data;
+      for(let i=0;i<p.length;i+=4){
+        const g = p[i]*.3 + p[i+1]*.59 + p[i+2]*.11;
+        const v = g > 150 ? 255 : g < 105 ? 0 : (g-105)*255/45;
+        p[i]=p[i+1]=p[i+2]=v;
+      }
+      x.putImageData(d,0,0);
+      res(c);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/* Parser de renglones.
+   Espera algo así:  A0012  ARROZ PRIMOR 1KG  12,00  1.500,00  18.000,00
+   Toma el primer token como código, el último bloque de números como precios
+   y la primera cifra de ese bloque como la cantidad.                       */
+/* Formato de Profit (nota de entrega / factura impresa a PDF):
+     CODIGO  DESCRIPCION  UND  [GRTIA]  CANTD  ALM  PRECIO  [%DESC]  NETO
+   La descripción puede seguir en la línea de abajo y cada página repite el encabezado. */
+function parsearProfit(texto){
+  const out = [];
+  const reRenglon = /^(\S+)\s+(.+?)\s+(\S{2,6})(?:\s+\d+(?:[.,]\d+)?)?\s+(\d+(?:[.,]\d+)?)\s+([A-Za-z0-9]{2,8})\s+[\d.,]+(?:\s+[\d.,]+)?\s+[\d.,]+$/;
+  const reSalta = /^(nota\s+de\s+(entrega|despacho)|factura\b|cliente|r\.?\s?i\.?\s?f|n\.?\s?i\.?\s?t|direcci|tel[eé]fonos|fecha|condici|vendedor|codigo\s+descripci|sub-?\s*total|descuento|total\b|son:|p[aá]gina|p[aá]g\b)/i;
+  let ultima = null;
+  const mDoc = String(texto).match(/(?:nota\s+de\s+(?:entrega|despacho)|factura)\s*(?:no\.?|n[º°o]\.?)?\s*:?\s*(\d{4,})/i);
+
+  String(texto).split(/\r?\n/).forEach(linea=>{
+    const l = limpiar(linea);
+    if(!l) return;
+    const m = l.match(reRenglon);
+    if(m){
+      ultima = { id: uid++, code: m[1], bar: "", desc: m[2], qty: Math.max(1, Math.round(numVe(m[4]) || 1)), got: 0 };
+      out.push(ultima);
+    } else if(reSalta.test(l)){
+      ultima = null;
+    } else if(ultima){
+      ultima.desc = limpiar(ultima.desc + " " + l);   // segunda línea de la descripción
+    }
+  });
+
+  if(out.length && mDoc){
+    doc = mDoc[1];
+    $("docNum").value = doc;
+    $("docLabel").textContent = doc;
+  }
+  return out;
+}
+
+function parsear(texto){
+  const pf = parsearProfit(texto);
+  if(pf.length) return pf;
+  const out = [];
+  String(texto).split(/\r?\n/).forEach(linea=>{
+    let l = limpiar(linea);
+    if(l.length < 8) return;
+    if(/^(sub\s*total|total|iva|base|exento|descuento|monto|cliente|rif|fecha|factura|nota|pagina|p[aá]g)/i.test(l)) return;
+
+    const tk = l.split(" ");
+    if(tk.length < 3) return;
+
+    // código: primer token con al menos un dígito
+    let code = "", i = 0;
+    if(/\d/.test(tk[0]) && tk[0].length >= 3){ code = tk[0]; i = 1; }
+    else if(/^\d+$/.test(tk[0]) && tk[1] && /\d/.test(tk[1])){ code = tk[1]; i = 2; }
+    else return;
+
+    // números al final
+    const nums = [];
+    let j = tk.length - 1;
+    while(j > i && /^[\d.,]+$/.test(tk[j]) && /\d/.test(tk[j])){ nums.unshift(tk[j]); j--; }
+    if(!nums.length) return;
+
+    const desc = limpiar(tk.slice(i, j+1).join(" "));
+    if(desc.length < 3) return;
+
+    const qty = Math.max(1, Math.round(numVe(nums[0]) || 1));
+    out.push({ id: uid++, code: code, bar: "", desc: desc, qty: qty, got: 0 });
+  });
+  return out;
+}
+
+/* ---------- tabla editable ---------- */
+function pintarTabla(){
+  $("tableBox").hidden = false;
+  const tb = $("tbody");
+  tb.innerHTML = "";
+  rows.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td class="code"><input type="text" value="'+esc(r.code)+'" data-f="code"></td>'+
+      '<td><input type="text" value="'+esc(r.desc)+'" data-f="desc"></td>'+
+      '<td class="qty"><input type="number" min="1" value="'+r.qty+'" data-f="qty"></td>'+
+      '<td class="del"><button class="icon-btn" title="Quitar renglón">✕</button></td>';
+    tr.querySelectorAll("input").forEach(inp=>{
+      inp.oninput = ()=>{
+        const f = inp.dataset.f;
+        r[f] = f==="qty" ? Math.max(1, parseInt(inp.value)||1) : inp.value;
+        guardarSesion();
+      };
+    });
+    tr.querySelector("button").onclick = ()=>{
+      rows = rows.filter(x=>x.id!==r.id);
+      pintarTabla(); guardarSesion();
+    };
+    tb.appendChild(tr);
+  });
+  const piezas = rows.reduce((a,r)=>a+r.qty,0);
+  $("rowCount").textContent = rows.length + " renglones · " + piezas + " piezas";
+  $("tab2").disabled = rows.length === 0;
+  $("tab3").disabled = rows.length === 0;
+  guardarSesion();
+}
+function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+
+$("btnAddRow").onclick = ()=>{ rows.push({id:uid++,code:"",bar:"",desc:"",qty:1,got:0}); pintarTabla(); };
+$("btnBorrarTodo").onclick = ()=>{
+  if(!confirm("¿Descartar esta factura y empezar de cero?")) return;
+  rows = []; unknown = {}; doc = "";
+  $("tableBox").hidden = true; $("pasteArea").value = "";
+  $("tab2").disabled = $("tab3").disabled = true;
+  guardarSesion();
+};
+$("docNum").oninput = e => { doc = e.target.value; $("docLabel").textContent = doc || "sin factura"; guardarSesion(); };
+$("btnEmpezar").onclick = ()=>{ rows.forEach(r=>r.got=0); unknown={}; ir(2); pintarChequeo(); };
+
+/* ---------- 2. chequeo ---------- */
+function buscarPorCodigo(c){
+  const n = norm(c);
+  if(!n) return null;
+  // El lector puede dar UPC-A (12) o EAN-13 con ceros de más: se comparan sin ceros a la izquierda.
+  const sinCeros = s => norm(s).replace(/^0+/, "");
+  const nb = sinCeros(c);
+  const coincide = rows.filter(x =>
+    barrasDe(x).some(b => sinCeros(b) === nb) || norm(x.code) === n);
+  // si el mismo producto está en varios renglones, primero el que aún no está completo
+  let r = coincide.find(x => x.got < x.qty) || coincide[0];
+  if(r) return r;
+  const id = aliases[n];
+  if(id != null){
+    r = rows.find(x=>norm(x.code)===norm(id));
+    if(r) return r;
+  }
+  return null;
+}
+
+function escanear(codigo){
+  const c = limpiar(codigo);
+  if(!c) return;
+  const r = buscarPorCodigo(c);
+  if(!r){
+    unknown[c] = (unknown[c]||0) + 1;
+    señal("bad", "No está en la factura", c, "");
+    beep("bad");
+    abrirAsignar(c);
+  } else {
+    abrirCantidad(r);
+    return;
+  }
+  pintarChequeo();
+  guardarSesion();
+}
+
+/* --- cuánto llegó de este renglón --- */
+let filaPendiente = null;
+function abrirCantidad(r){
+  filaPendiente = r;
+  $("dlgcTitulo").textContent = r.desc || "(sin descripción)";
+  $("dlgcCode").textContent =
+    (r.code ? r.code + " · " : "") + "la factura dice " + r.qty +
+    (r.got ? " · ya tenías " + r.got : "");
+  $("dlgcQty").textContent = r.qty;
+  $("dlgcNum").value = "";
+  $("dlgCantidad").showModal();
+  setTimeout(()=>$("dlgcNum").focus(), 60);
+}
+function aplicarCantidad(n){
+  const r = filaPendiente;
+  $("dlgCantidad").close();
+  filaPendiente = null;
+  if(!r) return;
+  r.got = Math.max(0, n);
+  if(r.got > r.qty){ señal("dup", "Llegaron de más", r.desc, r.got + " de " + r.qty); beep("dup"); }
+  else if(r.got === r.qty){ señal("ok", "Renglón completo", r.desc, r.got + " de " + r.qty); beep("ok"); }
+  else { señal("dup", "Quedó incompleto", r.desc, r.got + " de " + r.qty); beep("dup"); }
+  pintarChequeo();
+  guardarSesion();
+}
+$("dlgcCompleto").onclick = ()=>{ if(filaPendiente) aplicarCantidad(filaPendiente.qty); };
+$("dlgcGuardar").onclick = ()=>{
+  const n = parseInt($("dlgcNum").value, 10);
+  if(isNaN(n)){ $("dlgcNum").focus(); return; }
+  aplicarCantidad(n);
+};
+$("dlgcNum").addEventListener("keydown", e=>{
+  if(e.key === "Enter"){ e.preventDefault(); $("dlgcGuardar").click(); }
+});
+$("dlgcCancelar").onclick = ()=>{ $("dlgCantidad").close(); filaPendiente = null; };
+
+function señal(clase, veredicto, que, cuenta){
+  const s = $("signal");
+  s.className = "signal " + clase;
+  $("sigVerdict").textContent = veredicto;
+  $("sigWhat").textContent = que;
+  $("sigCount").textContent = cuenta;
+}
+
+function pintarChequeo(){
+  const ok = rows.filter(r=>r.got >= r.qty && r.got === r.qty).length;
+  const falta = rows.reduce((a,r)=>a + Math.max(0, r.qty - r.got), 0);
+  const nov = rows.filter(r=>r.got > r.qty).length + Object.keys(unknown).length;
+  $("tOk").textContent = ok;
+  $("tFalta").textContent = falta;
+  $("tNovedad").textContent = nov;
+
+  const q = norm($("buscar").value);
+  const ul = $("lista");
+  ul.innerHTML = "";
+  rows
+    .filter(r=>!q || norm(r.desc).includes(q) || norm(r.code).includes(q) ||
+      barrasDe(r).some(b => norm(b).includes(q)))
+    .sort((a,b)=>(a.got>=a.qty) - (b.got>=b.qty))
+    .forEach(r=>{
+      const li = document.createElement("li");
+      if(r.got > r.qty) li.className = "over";
+      else if(r.got >= r.qty) li.className = "done";
+      li.innerHTML =
+        '<div class="desc"><b>'+esc(r.desc||"(sin descripción)")+'</b><small>'+esc(r.code)+(barrasDe(r)[0] ? ' · '+esc(barrasDe(r)[0]) : '')+'</small></div>'+
+        '<span class="n '+(r.got>r.qty?"over":r.got>=r.qty?"full":"")+'">'+r.got+'/'+r.qty+'</span>';
+      const contar = document.createElement("button");
+      contar.className = "btn sm"; contar.textContent = "Contar";
+      contar.onclick = ()=>{ abrirCantidad(r); };
+      li.appendChild(contar);
+      ul.appendChild(li);
+    });
+  if(!ul.children.length) ul.innerHTML = '<li class="empty">Ningún renglón coincide con la búsqueda.</li>';
+}
+$("buscar").oninput = pintarChequeo;
+// Enter en el buscador: si lo escrito es un código de barras o interno exacto, cuenta ese producto
+$("buscar").addEventListener("keydown", e=>{
+  if(e.key !== "Enter") return;
+  const v = $("buscar").value.trim();
+  if(v && buscarPorCodigo(v)){
+    e.preventDefault();
+    $("buscar").value = "";
+    escanear(v);
+    pintarChequeo();
+  }
+});
+
+// Los renglones sin código de barra se cuentan con un id interno
+const escanearOrig = escanear;
+escanear = function(c){
+  if(String(c).startsWith("#")){
+    const r = rows.find(x=>x.id === parseInt(String(c).slice(1)));
+    if(r){ abrirCantidad(r); return; }
+  }
+  escanearOrig(c);
+};
+
+/* --- lector láser de la PDA (escribe como teclado) --- */
+let buf = "", tBuf = 0;
+$("modoPda").onchange = e => { if(e.target.checked) enfocarWedge(); else $("wedge").blur(); };
+function enfocarWedge(){
+  if(document.querySelector("dialog[open]")) return;
+  if($("modoPda").checked && !$("s2").hidden) $("wedge").focus();
+}
+document.addEventListener("click", ()=>{ if($("modoPda").checked) setTimeout(enfocarWedge, 30); });
+$("wedge").addEventListener("keydown", e=>{
+  if(e.key === "Enter"){ e.preventDefault(); if(buf) escanear(buf); buf=""; $("wedge").value=""; return; }
+  if(e.key.length === 1){
+    const ahora = Date.now();
+    if(ahora - tBuf > 400) buf = "";
+    tBuf = ahora; buf += e.key;
+  }
+});
+$("wedge").addEventListener("blur", ()=> setTimeout(enfocarWedge, 120));
+
+/* --- cámara --- */
+let stream = null, lazo = null;
+$("btnCam").onclick = abrirCamara;
+$("btnCamStop").onclick = cerrarCamara;
+
+async function abrirCamara(){
+  if(!("BarcodeDetector" in window)){
+    alert("Este navegador no lee códigos con la cámara. Usa el lector de la PDA o busca el producto en la lista.");
+    return;
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" } });
+    $("cam").srcObject = stream;
+    await $("cam").play();
+    $("camWrap").hidden = false;
+    const det = new BarcodeDetector({ formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf","codabar"] });
+    let ultimo = "", tUlt = 0;
+    lazo = setInterval(async ()=>{
+      try{
+        const cods = await det.detect($("cam"));
+        if(cods.length){
+          const v = cods[0].rawValue, ahora = Date.now();
+          if(v !== ultimo || ahora - tUlt > 1500){ ultimo = v; tUlt = ahora; escanear(v); }
+        }
+      }catch(e){}
+    }, 300);
+  }catch(e){
+    alert("No se pudo abrir la cámara: " + e.message);
+  }
+}
+function cerrarCamara(){
+  if(lazo) clearInterval(lazo), lazo = null;
+  if(stream) stream.getTracks().forEach(t=>t.stop()), stream = null;
+  $("camWrap").hidden = true;
+}
+
+/* --- asignar un código desconocido a un renglón --- */
+let codigoPendiente = "";
+function abrirAsignar(c){
+  codigoPendiente = c;
+  $("dlgCode").textContent = "Escaneaste " + c + ". Si pertenece a un renglón de la factura, selecciónalo y la app lo recordará para la próxima.";
+  $("dlgBuscar").value = "";
+  pintarDlg();
+  $("dlgAsignar").showModal();
+}
+function pintarDlg(){
+  const q = norm($("dlgBuscar").value);
+  const ul = $("dlgLista");
+  ul.innerHTML = "";
+  rows.filter(r=>!q || norm(r.desc).includes(q) || norm(r.code).includes(q)).slice(0,40).forEach(r=>{
+    const li = document.createElement("li");
+    li.innerHTML = '<div class="desc"><b>'+esc(r.desc)+'</b><small>'+esc(r.code)+' · '+r.got+'/'+r.qty+'</small></div>';
+    li.style.cursor = "pointer";
+    li.onclick = ()=>{
+      aliases[norm(codigoPendiente)] = r.code || ("#"+r.id);
+      if(!r.bar) r.bar = codigoPendiente;
+      save("alias_codigos", aliases);
+      delete unknown[codigoPendiente];
+      $("dlgAsignar").close();
+      escanear(codigoPendiente);
+    };
+    ul.appendChild(li);
+  });
+  if(!ul.children.length) ul.innerHTML = '<li class="empty">Sin coincidencias.</li>';
+}
+$("dlgBuscar").oninput = pintarDlg;
+$("dlgSobrante").onclick = ()=> $("dlgAsignar").close();
+$("dlgCerrar").onclick = ()=>{ delete unknown[codigoPendiente]; pintarChequeo(); $("dlgAsignar").close(); };
+
+$("btnCerrar").onclick = ()=>{ cerrarCamara(); ir(3); };
+
+/* ---------- 3. resumen ---------- */
+function pintarResumen(){
+  const falta  = rows.filter(r=>r.got < r.qty);
+  const sobra  = rows.filter(r=>r.got > r.qty);
+  const okList = rows.filter(r=>r.got === r.qty);
+  const desc   = Object.keys(unknown);
+
+  const limpio = !falta.length && !sobra.length && !desc.length;
+  $("resTitulo").textContent = limpio ? "Factura conforme" : "Factura con novedades";
+  $("resNota").textContent = limpio
+    ? (rows.length === 1 ? "El único renglón llegó completo. " : "Los " + rows.length + " renglones llegaron completos. ") + (doc ? "Factura " + doc + "." : "")
+    : "Revisa lo que está abajo antes de firmar. " + (doc ? "Factura " + doc + "." : "");
+
+  grupo("gFalta",  "Faltantes", falta,  r => (r.qty - r.got) + " de menos");
+  grupo("gSobra",  "Sobrantes", sobra,  r => (r.got - r.qty) + " de más");
+  grupo("gDesconocido", "Códigos que no están en la factura",
+        desc.map(c=>({code:c, desc:"Código sin renglón", _n:unknown[c]})), r => r._n + " lectura(s)");
+  grupo("gOk",     "Completos", okList, r => r.qty + " piezas");
+}
+function grupo(id, titulo, lista, detalle){
+  const g = $(id);
+  if(!lista.length){ g.innerHTML = ""; return; }
+  let h = '<h3>'+titulo+' <em>· '+lista.length+'</em></h3><ul class="items">';
+  lista.forEach(r=>{
+    h += '<li><div class="desc"><b>'+esc(r.desc)+'</b><small>'+esc(r.code)+'</small></div><span class="n">'+esc(detalle(r))+'</span></li>';
+  });
+  g.innerHTML = h + '</ul>';
+}
+
+function textoResumen(){
+  const f = new Date().toLocaleString("es-VE");
+  let t = "CHEQUEO DE FACTURA" + (doc ? " " + doc : "") + "\n" + f + "\n\n";
+  const falta = rows.filter(r=>r.got < r.qty), sobra = rows.filter(r=>r.got > r.qty);
+  const desc = Object.keys(unknown);
+  if(falta.length){ t += "FALTANTES\n"; falta.forEach(r=>t += "- " + r.code + " " + r.desc + ": llegaron " + r.got + " de " + r.qty + "\n"); t += "\n"; }
+  if(sobra.length){ t += "SOBRANTES\n"; sobra.forEach(r=>t += "- " + r.code + " " + r.desc + ": llegaron " + r.got + " de " + r.qty + "\n"); t += "\n"; }
+  if(desc.length){ t += "CÓDIGOS FUERA DE FACTURA\n"; desc.forEach(c=>t += "- " + c + " (" + unknown[c] + ")\n"); t += "\n"; }
+  if(!falta.length && !sobra.length && !desc.length) t += "Todo conforme: " + rows.length + " renglones completos.\n";
+  return t;
+}
+$("btnCopiar").onclick = async ()=>{
+  const t = textoResumen();
+  try{ await navigator.clipboard.writeText(t); $("btnCopiar").textContent = "Copiado"; setTimeout(()=>$("btnCopiar").textContent="Copiar resumen",1500); }
+  catch(e){ prompt("Copia el resumen:", t); }
+};
+$("btnCsv").onclick = ()=>{
+  let csv = "codigo;descripcion;facturado;recibido;diferencia\n";
+  rows.forEach(r=>{ csv += [r.code, '"'+String(r.desc).replace(/"/g,"'")+'"', r.qty, r.got, r.got-r.qty].join(";") + "\n"; });
+  Object.keys(unknown).forEach(c=>{ csv += [c, '"FUERA DE FACTURA"', 0, unknown[c], unknown[c]].join(";") + "\n"; });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff"+csv], {type:"text/csv"}));
+  a.download = "chequeo_" + (doc || "factura").replace(/\W+/g,"_") + ".csv";
+  a.click();
+};
+$("btnVolver").onclick = ()=>ir(2);
+$("btnNueva").onclick = ()=>{
+  if(!confirm("¿Cerrar esta factura y empezar otra?")) return;
+  rows = []; unknown = {}; doc = ""; $("docNum").value = ""; $("docLabel").textContent = "sin factura";
+  $("tableBox").hidden = true; $("pasteArea").value = "";
+  $("tab2").disabled = $("tab3").disabled = true;
+  guardarSesion(); ir(1);
+};
+
+/* ---------- retomar sesión ---------- */
+(function(){
+  const s = load("sesion", null);
+  if(s && s.rows && s.rows.length){
+    doc = s.doc || ""; rows = s.rows; unknown = s.unknown || {}; uid = s.uid || (rows.length+1);
+    $("docNum").value = doc; $("docLabel").textContent = doc || "sin factura";
+    pintarTabla(); pintarChequeo();
+    const hechos = rows.reduce((a,r)=>a+r.got,0);
+    if(hechos > 0) ir(2);
+  }
+})();
+</script>
+</body>
+</html>
