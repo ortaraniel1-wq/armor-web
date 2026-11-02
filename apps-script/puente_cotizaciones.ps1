@@ -13,7 +13,8 @@ param([switch]$Prueba)
 $SEDE      = "CHAG"           # BOLEITA | CHAG | GUAIRA (como en la página)
 $SERVIDOR  = "localhost"
 $BASE      = "ARMOR"
-$ALMACEN   = "CHAG"           # almacén de Profit desde donde se despacha (lleva el correlativo cotc_num)
+$ALMACEN   = "CHAG"           # almacén de Profit desde donde se despacha (va en los renglones)
+$CORRELATIVO = ""             # fila de la tabla almacen que lleva el correlativo cotc_num (vacío = el mismo $ALMACEN)
 $SUCURSAL  = "CHAG"           # co_sucu de Profit
 # Código de cliente en ESTE Profit para cada sede que pide:
 $CLIENTES  = @{
@@ -73,8 +74,9 @@ function Crear-Cotizacion($cn, $ped) {
         if ($rengs.Count -eq 0) { throw "No hay cantidades asignadas" }
 
         # 2) correlativo del almacén (igual que Profit)
+        $almaCorr = if ($CORRELATIVO) { $CORRELATIVO } else { $ALMACEN }
         $cmd.CommandText = "SELECT cotc_num FROM almacen WITH (UPDLOCK, ROWLOCK) WHERE co_alma = @alma"
-        $cmd.Parameters.Clear(); [void]$cmd.Parameters.AddWithValue("@alma", $ALMACEN)
+        $cmd.Parameters.Clear(); [void]$cmd.Parameters.AddWithValue("@alma", $almaCorr)
         $num = [int]$cmd.ExecuteScalar() + 1
         $cmd.CommandText = "UPDATE almacen SET cotc_num = @n WHERE co_alma = @alma"
         [void]$cmd.Parameters.AddWithValue("@n", $num)
