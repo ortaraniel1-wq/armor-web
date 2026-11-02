@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Faltantes Boleíta · Armor Market</title>
+<title>Faltantes entre sedes · Armor Market</title>
 <style>
   :root{--am:#FFCD11;--dark:#1b1b1b;--gris:#f3f3f3;--borde:#ddd;--rojo:#c62828;--verde:#2e7d32}
   *{box-sizing:border-box}
@@ -47,25 +47,26 @@
 </head>
 <body>
 <div id="login"><form id="fpin">
-  <h2>Faltantes <span style="color:#c9a000">Boleíta</span></h2>
+  <h2>Faltantes <span style="color:#c9a000">entre sedes</span></h2>
   <div style="font-size:13px;color:#666">Uso interno · escribe el PIN</div>
   <input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" autofocus>
   <button class="am" type="submit">Entrar</button>
   <div class="err" id="perr"></div>
 </form></div>
 <header>
-  <h1>Faltantes <span>Boleíta</span> · pedido entre sedes</h1>
+  <h1>Faltantes <span id="tDest">Boleíta</span> · pedido entre sedes</h1>
   <div class="act" id="act">Cargando…</div>
 </header>
 
 <div class="barra">
   <div class="fila" id="rubros"></div>
   <div class="fila">
-    <select id="origen">
-      <option value="">Traer de: todas las sedes</option>
-      <option value="CHAG">Traer de: Chaguaramos</option>
-      <option value="GUAIRA">Traer de: La Guaira</option>
+    <select id="destino" title="Sede a la que le falta">
+      <option value="BOLEITA">Sede que pide: Boleíta</option>
+      <option value="CHAG">Sede que pide: Chaguaramos</option>
+      <option value="GUAIRA">Sede que pide: La Guaira</option>
     </select>
+    <select id="origen"></select>
     <input type="search" id="q" placeholder="Buscar descripción, código o barra…">
   </div>
   <div class="fila">
@@ -82,7 +83,7 @@
   <div id="carga">Leyendo el inventario de las 3 sedes…</div>
   <table id="tabla" style="display:none">
     <thead><tr>
-      <th>Descripción</th><th>Cód. Boleíta</th><th>Barra</th>
+      <th>Descripción</th><th id="thCod">Cód. Boleíta</th><th>Barra</th>
       <th>Traer de</th><th class="num">Disp. sistema</th>
       <th class="num">Pedir</th><th class="num">Físico</th><th></th>
     </tr></thead>
@@ -110,7 +111,6 @@ const RUBROS = {
   ACCESO:'ACCESORIOS', ACCE:'ACCESORIOS',
   CAFE:'CAFETÍN', OFIC:'OFICINA', OFICI:'OFICINA', MASCO:'MASCOTAS', PERFUM:'PERFUMERÍA'
 };
-const NO_CODIFICADO = 'NO EXISTE EN BOLEÍTA';
 /* ========================= */
 
 let filas = [], rubroSel = '', datosAct = {};
@@ -136,40 +136,57 @@ function agrupar(json){
   return m;
 }
 
+let M = null;
 async function cargar(){
   const jsons = await Promise.all(Object.entries(SEDES).map(async ([k,s])=>{
     const r = await fetch(BASE + s.archivo + '?t=' + Date.now());
     if (!r.ok) throw new Error('No pude leer ' + s.archivo);
     const j = await r.json(); datosAct[k] = j.actualizado; return [k, agrupar(j)];
   }));
-  const M = Object.fromEntries(jsons);
-  const B = M.BOLEITA;
-  const barras = new Set([...M.CHAG.keys(), ...M.GUAIRA.keys()]);
-  filas = [];
-  for (const barra of barras){
-    const b = B.get(barra);
-    if (b && b.stock > 0) continue;               // Boleíta sí tiene
-    const c = M.CHAG.get(barra), g = M.GUAIRA.get(barra);
-    const sc = c ? c.stock : 0, sg = g ? g.stock : 0;
-    if (sc <= 0 && sg <= 0) continue;              // nadie tiene
-    const origen = sc >= sg ? 'CHAG' : 'GUAIRA';
-    const o = origen === 'CHAG' ? c : g;
-    const otro = origen === 'CHAG' ? sg : sc;
-    const ref = b || o;
-    const rubro = b ? (RUBROS[b.linea] || RUBROS[o.linea] || 'OTROS') : NO_CODIFICADO;
-    if (b && ['SERV','MINER'].includes(b.linea)) continue;
-    filas.push({
-      barra, desc: ref.desc, rubro,
-      codB: b ? b.codigo : '—',
-      origen, codO: o.codigo, disp: o.stock, otro,
-      sug: Math.max(1, Math.ceil(o.stock * FRACCION_SUGERIDA))
-    });
-  }
-  filas.sort((a,b)=>a.rubro.localeCompare(b.rubro) || a.desc.localeCompare(b.desc));
+  M = Object.fromEntries(jsons);
   document.getElementById('act').textContent =
     Object.entries(datosAct).map(([k,v])=>SEDES[k].nombre+': '+v).join(' · ');
   document.getElementById('carga').style.display='none';
   document.getElementById('tabla').style.display='';
+  calcular();
+}
+
+function destino(){ return document.getElementById('destino').value }
+function noCod(){ return 'NO EXISTE EN ' + SEDES[destino()].nombre.toUpperCase() }
+
+function calcular(){
+  const dest = destino();
+  const otras = Object.keys(SEDES).filter(k=>k!==dest);
+  // encabezados y selector de origen
+  document.getElementById('tDest').textContent = SEDES[dest].nombre;
+  document.getElementById('thCod').textContent = 'Cód. ' + SEDES[dest].nombre;
+  const og = document.getElementById('origen'), prev = og.value;
+  og.innerHTML = '<option value="">Traer de: ambas sedes</option>' +
+    otras.map(k=>`<option value="${k}">Traer de: ${SEDES[k].nombre}</option>`).join('');
+  if (otras.includes(prev)) og.value = prev;
+  rubroSel = '';
+  const D = M[dest], [k1,k2] = otras, A = M[k1], B2 = M[k2];
+  const barras = new Set([...A.keys(), ...B2.keys()]);
+  filas = [];
+  for (const barra of barras){
+    const d = D.get(barra);
+    if (d && d.stock > 0) continue;               // la sede que pide sí tiene
+    const a = A.get(barra), b = B2.get(barra);
+    const sa = a ? a.stock : 0, sb = b ? b.stock : 0;
+    if (sa <= 0 && sb <= 0) continue;              // nadie tiene
+    const origen = sa >= sb ? k1 : k2;
+    const o = origen === k1 ? a : b;
+    const otro = origen === k1 ? sb : sa;
+    if (d && ['SERV','MINER'].includes(d.linea)) continue;
+    const rubro = d ? (RUBROS[d.linea] || RUBROS[o.linea] || 'OTROS') : noCod();
+    filas.push({
+      k: dest + '|' + barra, barra, desc: (d || o).desc, rubro,
+      codB: d ? d.codigo : '—',
+      origen, otraSede: origen === k1 ? k2 : k1, codO: o.codigo, disp: o.stock, otro,
+      sug: Math.max(1, Math.ceil(o.stock * FRACCION_SUGERIDA))
+    });
+  }
+  filas.sort((a,b)=>a.rubro.localeCompare(b.rubro) || a.desc.localeCompare(b.desc));
   pintarRubros(); pintar();
 }
 
@@ -187,7 +204,7 @@ function pintarRubros(){
   const cnt = {};
   filas.forEach(f=>{ if(!og || f.origen===og) cnt[f.rubro]=(cnt[f.rubro]||0)+1 });
   const total = Object.values(cnt).reduce((a,b)=>a+b,0);
-  const orden = Object.keys(cnt).sort((a,b)=> (a===NO_CODIFICADO)-(b===NO_CODIFICADO) || cnt[b]-cnt[a]);
+  const NC = noCod(); const orden = Object.keys(cnt).sort((a,b)=> (a===NC)-(b===NC) || cnt[b]-cnt[a]);
   const el = document.getElementById('rubros');
   el.innerHTML = `<span class="chip ${!rubroSel?'on':''}" data-r="">Todos <small>${total}</small></span>` +
     orden.map(r=>`<span class="chip ${rubroSel===r?'on':''}" data-r="${r}">${r} <small>${cnt[r]}</small></span>`).join('');
@@ -197,7 +214,7 @@ function pintarRubros(){
 function esc(s){ return String(s).replace(/[&<>"]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])) }
 
 function estado(f){
-  const e = ediciones[f.barra] || {};
+  const e = ediciones[f.k] || {};
   if (e.fisico === undefined || e.fisico === '') return '';
   return Number(e.fisico) < Number(f.disp) ? 'nov' : 'ok';
 }
@@ -206,13 +223,13 @@ function pintar(){
   const v = visibles();
   const LIM = 600;
   document.getElementById('cuerpo').innerHTML = v.slice(0,LIM).map(f=>{
-    const e = ediciones[f.barra] || {};
+    const e = ediciones[f.k] || {};
     const st = estado(f);
-    return `<tr class="${st}" data-b="${esc(f.barra)}">
-      <td>${esc(f.desc)} ${f.rubro===NO_CODIFICADO?'<span class="tag r">crear código</span>':''}</td>
+    return `<tr class="${st}" data-b="${esc(f.k)}">
+      <td>${esc(f.desc)} ${f.rubro===noCod()?'<span class="tag r">crear código</span>':''}</td>
       <td class="cod">${esc(f.codB)}</td>
       <td class="cod">${esc(f.barra)}</td>
-      <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.origen==='CHAG'?'GUAIRA':'CHAG'].nombre}: ${f.otro}</span>`:''}</td>
+      <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.otraSede].nombre}: ${f.otro}</span>`:''}</td>
       <td class="num">${f.disp}</td>
       <td class="num"><input type="number" min="0" data-k="pedir" value="${e.pedir ?? f.sug}"></td>
       <td class="num"><input type="number" min="0" data-k="fisico" value="${e.fisico ?? ''}" placeholder="—"></td>
@@ -224,7 +241,7 @@ function pintar(){
     ediciones[b] = ediciones[b] || {};
     ediciones[b][inp.dataset.k] = inp.value;
     store.set('ed', ediciones);
-    const f = filas.find(x=>x.barra===b);
+    const f = filas.find(x=>x.k===b);
     inp.closest('tr').className = estado(f);
     inp.closest('tr').lastElementChild.innerHTML = estado(f)==='nov'?'<span class="tag r">novedad</span>':'';
     resumen();
@@ -247,22 +264,22 @@ function csv(nombre, cab, rows){
   a.href = URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));
   a.download = nombre; a.click();
 }
-function hoy(){ return new Date().toISOString().slice(0,10) }
+function hoy(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') }
 
 function exportPedido(){
   const v = visibles();
   const og = document.getElementById('origen').value;
-  const nombre = `pedido_Boleita_${og?SEDES[og].nombre:'todas'}_${(rubroSel||'todos').replace(/\s+/g,'_')}_${hoy()}.csv`;
+  const nombre = `pedido_${SEDES[destino()].nombre.replace(/\s+/g,'_')}_desde_${og?SEDES[og].nombre.replace(/\s+/g,'_'):'ambas'}_${(rubroSel||'todos').replace(/\s+/g,'_')}_${hoy()}.csv`;
   csv(nombre,
-    ['Rubro','Sede origen','Código origen','Barra','Descripción','Disp. sistema','Cant. pedida','Cant. física','Código Boleíta'],
-    v.map(f=>{ const e=ediciones[f.barra]||{}; return [f.rubro,SEDES[f.origen].nombre,f.codO,f.barra,f.desc,f.disp,e.pedir??f.sug,e.fisico??'',f.codB]; }));
+    ['Rubro','Sede origen','Código origen','Barra','Descripción','Disp. sistema','Cant. pedida','Cant. física','Código '+SEDES[destino()].nombre],
+    v.map(f=>{ const e=ediciones[f.k]||{}; return [f.rubro,SEDES[f.origen].nombre,f.codO,f.barra,f.desc,f.disp,e.pedir??f.sug,e.fisico??'',f.codB]; }));
 }
 function exportNovedades(){
   const n = filas.filter(f=>estado(f)==='nov');
   if (!n.length) return alertaSuave('No hay novedades marcadas todavía.');
   csv(`novedades_inventario_${hoy()}.csv`,
     ['Sede','Código','Barra','Descripción','Sistema','Físico','Diferencia'],
-    n.map(f=>{ const fis=Number(ediciones[f.barra].fisico); return [SEDES[f.origen].nombre,f.codO,f.barra,f.desc,f.disp,fis,fis-f.disp]; }));
+    n.map(f=>{ const fis=Number(ediciones[f.k].fisico); return [SEDES[f.origen].nombre,f.codO,f.barra,f.desc,f.disp,fis,fis-f.disp]; }));
 }
 function limpiar(){
   if (!document.getElementById('resumen').dataset.c){
@@ -275,6 +292,8 @@ function alertaSuave(t){ const r=document.getElementById('resumen'); r.textConte
 
 document.getElementById('q').oninput = pintar;
 document.getElementById('origen').onchange = ()=>{ pintarRubros(); pintar(); };
+document.getElementById('destino').onchange = ()=>{ store.set('dest', destino()); if (M) calcular(); };
+{ const d0 = store.get('dest'); if (SEDES[d0]) document.getElementById('destino').value = d0; }
 /* ===== PIN ===== (para cambiarlo pídele a Claude un hash nuevo) */
 const PIN_HASH = '97dcf1f58f6bf9974cd53911705d7ea2c8f6f70a22e1712190e162f3b27328ce';
 async function hash(t){
