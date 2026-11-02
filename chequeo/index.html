@@ -1036,32 +1036,62 @@ let stream = null, lazo = null;
 $("btnCam").onclick = abrirCamara;
 $("btnCamStop").onclick = cerrarCamara;
 
+// Safari del iPhone no trae BarcodeDetector: en ese caso se usa la librería ZXing (se baja solo cuando hace falta)
+const ZXING_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
+let zxLector = null;
+
 async function abrirCamara(){
-  if(!("BarcodeDetector" in window)){
-    alert("Este navegador no lee códigos con la cámara. Usa el lector de la PDA o busca el producto en la lista.");
-    return;
-  }
   try{
-    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" } });
-    $("cam").srcObject = stream;
-    await $("cam").play();
-    $("camWrap").hidden = false;
-    const det = new BarcodeDetector({ formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf","codabar"] });
-    let ultimo = "", tUlt = 0;
-    lazo = setInterval(async ()=>{
-      try{
-        const cods = await det.detect($("cam"));
-        if(cods.length){
-          const v = cods[0].rawValue, ahora = Date.now();
-          if(v !== ultimo || ahora - tUlt > 1500){ ultimo = v; tUlt = ahora; escanear(v); }
-        }
-      }catch(e){}
-    }, 300);
+    if("BarcodeDetector" in window) await camaraNativa();
+    else await camaraZXing();
   }catch(e){
-    alert("No se pudo abrir la cámara: " + e.message);
+    cerrarCamara();
+    alert("No se pudo abrir la cámara: " + (e && e.message ? e.message : e));
   }
 }
+
+async function camaraNativa(){
+  stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" } });
+  $("cam").srcObject = stream;
+  await $("cam").play();
+  $("camWrap").hidden = false;
+  const det = new BarcodeDetector({ formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf","codabar"] });
+  let ultimo = "", tUlt = 0;
+  lazo = setInterval(async ()=>{
+    try{
+      const cods = await det.detect($("cam"));
+      if(cods.length){
+        const v = cods[0].rawValue, ahora = Date.now();
+        if(v !== ultimo || ahora - tUlt > 1500){ ultimo = v; tUlt = ahora; escanear(v); }
+      }
+    }catch(e){}
+  }, 300);
+}
+
+async function camaraZXing(){
+  if(!window.ZXing){
+    try{ await cargarScript(ZXING_URL); }
+    catch(e){ throw new Error("no se pudo bajar el lector de códigos (¿hay internet?)"); }
+  }
+  const Z = window.ZXing;
+  const formatos = [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E,
+                    Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.CODE_39, Z.BarcodeFormat.ITF, Z.BarcodeFormat.CODABAR];
+  const hints = new Map();
+  hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, formatos);
+  zxLector = new Z.BrowserMultiFormatReader(hints, 200);   // sin TRY_HARDER: con esa opción no leía nada
+  $("camWrap").hidden = false;
+  let ultimo = "", tUlt = 0;
+  await zxLector.decodeFromConstraints(
+    { video:{ facingMode:"environment", width:{ ideal:1280 }, height:{ ideal:720 } } },
+    "cam",
+    (res)=>{
+      if(!res) return;                       // cada cuadro sin código llega como error: se ignora
+      const v = res.getText(), ahora = Date.now();
+      if(v !== ultimo || ahora - tUlt > 1500){ ultimo = v; tUlt = ahora; escanear(v); }
+    });
+}
 function cerrarCamara(){
+  if(zxLector){ try{ zxLector.reset(); }catch(e){} zxLector = null; }
   if(lazo) clearInterval(lazo), lazo = null;
   if(stream) stream.getTracks().forEach(t=>t.stop()), stream = null;
   $("camWrap").hidden = true;
