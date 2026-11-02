@@ -33,6 +33,12 @@
   th,td{padding:7px 8px;border-bottom:1px solid #eee;text-align:left;vertical-align:middle}
   th{background:#fafafa}
   td.num,th.num{text-align:right}
+  .step{display:inline-flex;align-items:center;gap:4px}
+  .step button{width:34px;height:34px;padding:0;font-size:20px;line-height:1;background:#eee;color:#111;border-radius:8px;font-weight:700}
+  .step button:active{background:var(--am)}
+  .step input[type=number]{width:52px!important;text-align:center!important;-moz-appearance:textfield}
+  .step input::-webkit-outer-spin-button,.step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  #cuerpo tr.sel td{background:#fff8d6}
   td input[type=number]{width:70px;padding:4px;border:1px solid var(--borde);border-radius:6px;text-align:right}
   .cod{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#555}
   .sede{font-weight:600}
@@ -90,7 +96,9 @@
     #tabla td:nth-child(5){grid-column:2;grid-row:2;text-align:right;font-size:12px;color:#555}
     #tabla td:nth-child(5)::before{content:'Disp. '}
     #tabla td:nth-child(6){grid-column:2;grid-row:3/5;align-self:center}
-    #tabla td input[type=number]{width:72px;padding:8px}
+    #tabla td input[type=number]{padding:8px}
+    #tabla tr.sel{background:#fff8d6}
+    .step button{width:42px;height:42px;font-size:22px}
     #almacen table,#almacen tbody{display:block}
     #almacen tr[data-n]{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px 4px;border-bottom:1px solid #e6e6e6}
     #almacen tr[data-n] td{border:0;padding:0}
@@ -318,19 +326,25 @@ function pintarRubros(){
 }
 function pintar(){
   const v=visibles(), LIM=600;
-  $('#cuerpo').innerHTML = v.slice(0,LIM).map(f=>`<tr data-b="${esc(f.k)}">
+  $('#cuerpo').innerHTML = v.slice(0,LIM).map(f=>`<tr data-b="${esc(f.k)}" class="${cant(f)>0?'sel':''}">
       <td>${esc(f.desc)} ${f.rubro===noCod()?'<span class="tag r">crear código</span>':''}</td>
       <td class="cod">${esc(f.codB)}</td><td class="cod">${esc(f.barra)}</td>
       <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.otraSede].nombre}: ${f.otro}</span>`:''}</td>
       <td class="num">${f.disp}</td>
-      <td class="num"><input type="number" min="0" max="${f.disp}" value="${cant(f)}"></td></tr>`).join('') +
+      <td class="num"><span class="step"><button type="button" data-d="-1" aria-label="menos">−</button><input type="number" inputmode="numeric" min="0" max="${f.disp}" value="${cant(f)}"><button type="button" data-d="1" aria-label="más">+</button></span></td></tr>`).join('') +
     (v.length>LIM ? `<tr><td colspan="6" style="text-align:center;color:#888">Mostrando ${LIM} de ${v.length}. Usa el buscador o elige un rubro.</td></tr>`:'');
   document.querySelectorAll('#cuerpo input').forEach(inp=>inp.onchange=()=>{
     const k=inp.closest('tr').dataset.b, f=filas.find(x=>x.k===k);
     let n=Math.max(0, Math.floor(Number(inp.value)||0)); if (n>f.disp) n=f.disp; inp.value=n;
     if (n>0) ediciones[k]={pedir:n}; else delete ediciones[k];
+    inp.closest('tr').classList.toggle('sel', n>0);
     store.set('ed', ediciones); resumen();
   });
+  document.querySelectorAll('#cuerpo .step button').forEach(b=>b.onclick=()=>{
+    const inp=b.parentNode.querySelector('input'); inp.value=Math.max(0,(Number(inp.value)||0)+Number(b.dataset.d)); inp.onchange();
+  });
+  document.querySelectorAll('#cuerpo input').forEach(inp=>inp.onfocus=()=>{ if(inp.value==='0') inp.value=''; else inp.select(); });
+  document.querySelectorAll('#cuerpo input').forEach(inp=>inp.addEventListener('blur',()=>{ if(inp.value===''){ inp.value=0; } }));
   resumen();
 }
 function resumen(){
@@ -439,7 +453,7 @@ function pintarAlmacen(){
       ${p.items.map(i=>{ const v=valor(p,i); return `<tr class="${esc(v.estado)}" data-p="${esc(p.id)}" data-n="${i.n}">
         <td>${esc(i.descripcion)}<br><span class="cod">${esc(i.rubro)}</span></td><td class="cod">${esc(i.cod_origen)}</td><td class="cod">${esc(i.barra)}</td>
         <td class="num"><b>${i.pedida}</b></td>
-        <td class="num"><input type="number" min="0" data-k="preparada" value="${v.preparada===''||v.preparada==null?'':v.preparada}" placeholder="${i.pedida}"></td>
+        <td class="num"><span class="step"><button type="button" data-d="-1" aria-label="menos">−</button><input type="number" inputmode="numeric" min="0" data-k="preparada" value="${v.preparada===''||v.preparada==null?'':v.preparada}" placeholder="${i.pedida}"><button type="button" data-d="1" aria-label="más">+</button></span></td>
         <td style="white-space:nowrap">
           <button class="${v.estado==='Listo'?'ok':'gris'}" data-k="Listo">✅ Listo</button>
           <button class="${v.estado==='Novedad'?'mal':'gris'}" data-k="Novedad">⚠️ Novedad</button>
@@ -456,7 +470,7 @@ function pintarAlmacen(){
   const reg=(pid,n)=>{ borr[pid]=borr[pid]||{}; const p=PED.find(x=>x.id===pid), i=p.items.find(x=>x.n==n); return borr[pid][n]=borr[pid][n]||{...valor(p,i)}; };
   document.querySelectorAll('#almacen tr[data-n]').forEach(tr=>{
     const pid=tr.dataset.p, n=tr.dataset.n;
-    tr.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    tr.querySelectorAll('button[data-k]').forEach(b=>b.onclick=()=>{
       const r=reg(pid,n), p=PED.find(x=>x.id===pid), i=p.items.find(x=>x.n==n);
       r.estado = r.estado===b.dataset.k ? 'Pendiente' : b.dataset.k;
       if (r.estado==='Listo' && (r.preparada===''||r.preparada==null)) r.preparada=i.pedida;
@@ -465,6 +479,12 @@ function pintarAlmacen(){
       pintarPedidos();
     });
     tr.querySelector('input').onchange=e=>{ const r=reg(pid,n); r.preparada=e.target.value===''?'':Math.max(0,Number(e.target.value)); };
+    tr.querySelector('input').onfocus=e=>e.target.select();
+    tr.querySelectorAll('.step button').forEach(b=>b.onclick=()=>{
+      const inp=tr.querySelector('input'), p=PED.find(x=>x.id===pid), i=p.items.find(x=>x.n==n);
+      const base = inp.value==='' ? Number(i.pedida) : Number(inp.value)||0;
+      inp.value=Math.min(Number(i.pedida), Math.max(0, base+Number(b.dataset.d))); reg(pid,n).preparada=Number(inp.value);
+    });
     const sel=tr.querySelector('select'); if (sel) sel.onchange=e=>{ reg(pid,n).nota=e.target.value; };
   });
   document.querySelectorAll('[data-todo]').forEach(b=>b.onclick=()=>{
