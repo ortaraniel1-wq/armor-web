@@ -371,54 +371,51 @@ async function libsPDF(){
   await cargarJS('js/jspdf.plugin.autotable.min.js');
   return !!(window.jspdf && window.jspdf.jsPDF.API.autoTable);
 }
-async function crearPDF(p){
+/* Un PDF por sede de origen: cada sede recibe solo lo que se le pide */
+async function crearPDF(p, origen){
   if (!(await libsPDF())) throw new Error('No pude cargar el generador de PDF');
   const {jsPDF}=window.jspdf, d=new jsPDF({unit:'mm', format:'a4'}), W=210;
-  const sede=NOMBRE[p.sede]||p.sede, unidades=p.items.reduce((s,i)=>s+Number(i.cantidad),0);
+  const sede=NOMBRE[p.sede]||p.sede, para=NOMBRE[origen]||origen;
+  const lst=p.items.filter(i=>i.origen===origen), unidades=lst.reduce((s,i)=>s+Number(i.cantidad),0);
   d.setFillColor(27,27,27); d.rect(0,0,W,24,'F');
   d.setTextColor(255,205,17); d.setFont('helvetica','bold'); d.setFontSize(18); d.text('ARMOR MARKET',12,15);
   d.setTextColor(255,255,255); d.setFontSize(11); d.text('PEDIDO ENTRE SEDES',W-12,11,{align:'right'});
   d.setFontSize(16); d.text(p.numero,W-12,19,{align:'right'});
   d.setTextColor(30,30,30); d.setFontSize(10);
-  const info=[['Sede que pide:',sede],['Solicitado por:',p.creado_por||''],['Fecha:',p.fecha||''],['Productos:',`${p.items.length}  (${unidades} unidades)`]];
+  const info=[['Sede que pide:',sede],['Para:',para],['Solicitado por:',p.creado_por||''],['Fecha:',p.fecha||''],['Productos:',`${lst.length}  (${unidades} unidades)`]];
   let y=33; info.forEach(([a,b])=>{ d.setFont('helvetica','bold'); d.text(a,12,y); d.setFont('helvetica','normal'); d.text(String(b),45,y); y+=6; });
   if (p.estado==='Anulado'){ d.setTextColor(198,40,40); d.setFont('helvetica','bold'); d.setFontSize(14); d.text('ANULADO',W-12,33,{align:'right'}); d.setTextColor(30,30,30); }
-  y+=2;
-  const grupos={}; p.items.forEach(i=>(grupos[i.origen]=grupos[i.origen]||[]).push(i));
-  Object.entries(grupos).forEach(([o,lst])=>{
-    d.setFont('helvetica','bold'); d.setFontSize(11); d.setTextColor(30,30,30);
-    d.text(`Traer de: ${NOMBRE[o]||o}  ·  ${lst.length} productos`,12,y+4);
-    d.autoTable({startY:y+6, margin:{left:12,right:12},
-      head:[['#',`Cód. ${NOMBRE[o]||o}`,'Barra','Descripción',`Cód. ${sede}`,'Cant.']],
-      body:lst.map((i,k)=>[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.cantidad]),
-      styles:{fontSize:8.5,cellPadding:1.6,valign:'middle'},
-      headStyles:{fillColor:[255,205,17],textColor:20,fontStyle:'bold'},
-      columnStyles:{0:{cellWidth:8,halign:'center'},1:{cellWidth:27},2:{cellWidth:28},4:{cellWidth:24},5:{cellWidth:13,halign:'center',fontStyle:'bold'}},
-      alternateRowStyles:{fillColor:[247,247,247]}});
-    y=d.lastAutoTable.finalY+6;
-  });
-  if (y>262){ d.addPage(); y=20; }
-  d.setDrawColor(180); d.setFont('helvetica','normal'); d.setFontSize(10);
-  d.text('Tomado por: ______________________',12,y+8); d.text('Cotización N°: ______________',W-12,y+8,{align:'right'});
+  d.autoTable({startY:y+2, margin:{left:12,right:12},
+    head:[['#',`Cód. ${para}`,'Barra','Descripción',`Cód. ${sede}`,'Cant.']],
+    body:lst.map((i,k)=>[k+1,i.cod_origen,i.barra,i.descripcion,i.cod_sede,i.cantidad]),
+    styles:{fontSize:8.5,cellPadding:1.6,valign:'middle'},
+    headStyles:{fillColor:[255,205,17],textColor:20,fontStyle:'bold'},
+    columnStyles:{0:{cellWidth:8,halign:'center'},1:{cellWidth:27},2:{cellWidth:28},4:{cellWidth:24},5:{cellWidth:13,halign:'center',fontStyle:'bold'}},
+    alternateRowStyles:{fillColor:[247,247,247]}});
   const n=d.getNumberOfPages();
-  for (let i=1;i<=n;i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140); d.text(`${p.numero} · ${sede} · página ${i} de ${n}`,W/2,290,{align:'center'}); }
+  for (let i=1;i<=n;i++){ d.setPage(i); d.setFontSize(8); d.setTextColor(140); d.text(`${p.numero} · ${sede} → ${para} · página ${i} de ${n}`,W/2,290,{align:'center'}); }
   return d.output('blob');
+}
+function nombrePDF(p,o){ return `Pedido_${p.numero}_${sinAcento(NOMBRE[p.sede]||p.sede)}_para_${sinAcento(NOMBRE[o]||o)}.pdf` }
+async function pdfsDe(p){
+  const ors=[...new Set(p.items.map(i=>i.origen))];
+  return Promise.all(ors.map(async o=>({o, nombre:nombrePDF(p,o), blob:await crearPDF(p,o)})));
 }
 async function compartir(p){
   try{
-    const blob=await crearPDF(p), nombre=`Pedido_${p.numero}_${sinAcento(NOMBRE[p.sede]||p.sede)}.pdf`;
-    const file=new File([blob], nombre, {type:'application/pdf'});
-    const texto=`Pedido ${p.numero} · ${NOMBRE[p.sede]||p.sede} · ${p.creado_por||''} · ${p.items.length} productos`;
-    if (navigator.canShare && navigator.canShare({files:[file]})){
-      try{ await navigator.share({files:[file], title:`Pedido ${p.numero}`, text:texto}); return; }
+    const docs=await pdfsDe(p);
+    const files=docs.map(x=>new File([x.blob], x.nombre, {type:'application/pdf'}));
+    const texto=`Pedido ${p.numero} · ${NOMBRE[p.sede]||p.sede} · ${p.creado_por||''} → `+docs.map(x=>NOMBRE[x.o]||x.o).join(' y ');
+    if (navigator.canShare && navigator.canShare({files})){
+      try{ await navigator.share({files, title:`Pedido ${p.numero}`, text:texto}); return; }
       catch(e){ if (e.name==='AbortError') return; }
     }
-    descargar(blob, nombre);
-    toast('PDF descargado. Adjúntalo en el grupo Pedidos de WhatsApp.', 5000);
+    docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400));
+    toast(`${docs.length>1?docs.length+' PDF descargados':'PDF descargado'}. Adjúntalo${docs.length>1?'s':''} en el grupo Pedidos de WhatsApp.`, 5000);
   }catch(e){ toast('⚠ '+e.message, 5000); }
 }
 async function bajarPDF(p){
-  try{ descargar(await crearPDF(p), `Pedido_${p.numero}_${sinAcento(NOMBRE[p.sede]||p.sede)}.pdf`); }
+  try{ const docs=await pdfsDe(p); docs.forEach((x,i)=>setTimeout(()=>descargar(x.blob, x.nombre), i*400)); }
   catch(e){ toast('⚠ '+e.message, 5000); }
 }
 function descargar(blob, nombre){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; a.click(); }
@@ -441,42 +438,59 @@ async function refrescar(){
   catch(err){ if (/PIN/.test(err.message)){ store.set('ses',null); location.reload(); } }
 }
 function esMia(p){ return S.sede==='ADMIN' || p.sede===S.sede }
+function mapa(t){ const m={}; String(t||'').split(',').forEach(x=>{ const i=x.indexOf(':'); if(i>0) m[x.slice(0,i).trim()]=x.slice(i+1).trim(); }); return m; }
+function origenesDe(p){ return [...new Set(p.items.map(i=>i.origen))] }
+/* lo que ve esta sede del pedido: la que pide y Administración ven todo; las demás, solo su parte */
+function vista(p){
+  if (esMia(p)) return p;
+  const items=p.items.filter(i=>i.origen===S.sede);
+  const cot=mapa(p.nro_cotizacion)[S.sede];
+  return Object.assign({}, p, {items, estado: p.estado==='Anulado'?'Anulado':(cot?'Cotizado':'Enviado')});
+}
+function pendienteParaMi(p){
+  if (p.estado==='Anulado') return false;
+  const cot=mapa(p.nro_cotizacion);
+  if (S.sede==='ADMIN') return origenesDe(p).some(o=>!cot[o]);
+  return p.sede!==S.sede && p.items.some(i=>i.origen===S.sede) && !cot[S.sede];
+}
 function contador(){
-  const n=PED.filter(p=>p.estado==='Enviado' && (S.sede==='ADMIN' || p.sede!==S.sede)).length;
-  const e=$('#nPed'); e.hidden=!n; e.textContent=n;
+  const n=PED.filter(pendienteParaMi).length, e=$('#nPed'); e.hidden=!n; e.textContent=n;
 }
 function pintarPedidos(){
-  if (!PED.length){ $('#pedidos').innerHTML='<div class="msg">Todavía no hay pedidos.</div>'; return; }
-  $('#pedidos').innerHTML=PED.map(p=>{
+  const lista=PED.map(vista).filter(p=>p.items.length);
+  if (!lista.length){ $('#pedidos').innerHTML='<div class="msg">Todavía no hay pedidos.</div>'; return; }
+  $('#pedidos').innerHTML=lista.map(p=>{
     const u=p.items.reduce((s,i)=>s+Number(i.cantidad),0), ab=abiertos.has(p.numero);
-    const origen=[...new Set(p.items.map(i=>NOMBRE[i.origen]||i.origen))].join(' y ');
-    const puedeCot = p.estado==='Enviado' && (S.sede==='ADMIN' || p.sede!==S.sede);
+    const ors=origenesDe(p), cot=mapa(p.nro_cotizacion), cpor=mapa(p.cotizado_por);
+    const origen=ors.map(o=>NOMBRE[o]||o).join(' y ');
+    const cotTxt=ors.filter(o=>cot[o]).map(o=>`${esMia(p)&&ors.length>1?(NOMBRE[o]||o)+': ':''}Cotización <b>${esc(cot[o])}</b>${cpor[o]?' · '+esc(cpor[o]):''}`).join(' · ');
+    const porCotizar = p.estado==='Anulado' ? [] : (S.sede==='ADMIN' ? ors.filter(o=>!cot[o]) : (!esMia(p) && !cot[S.sede] ? [S.sede] : []));
     return `<div class="card"><div class="cab" data-n="${esc(p.numero)}">
       <span class="num">${esc(p.numero)}</span>
       <span class="est est-${esc(p.estado)}">${esc(p.estado)}</span>
       <span><b>${esc(NOMBRE[p.sede]||p.sede)}</b> pide a ${esc(origen)}</span>
       <span class="resumen">${esc(p.fecha)} · ${esc(p.creado_por)} · ${p.items.length} productos (${u} und.)</span>
-      ${p.nro_cotizacion?`<span class="resumen">Cotización <b>${esc(p.nro_cotizacion)}</b>${p.cotizado_por?' · '+esc(p.cotizado_por):''}</span>`:''}
+      ${cotTxt?`<span class="resumen">${cotTxt}</span>`:''}
     </div>
     ${ab?`<div class="det">
-      <table><tr><th>#</th><th>Traer de</th><th>Cód. origen</th><th>Descripción</th><th>Cód. ${esc(NOMBRE[p.sede]||'')}</th><th class="num">Cant.</th></tr>
-      ${p.items.map(i=>`<tr><td>${i.n}</td><td>${esc(NOMBRE[i.origen]||i.origen)}</td><td class="cod">${esc(i.cod_origen)}</td><td>${esc(i.descripcion)}</td><td class="cod">${esc(i.cod_sede)}</td><td class="num"><b>${i.cantidad}</b></td></tr>`).join('')}
+      <table><tr><th>#</th>${ors.length>1?'<th>Traer de</th>':''}<th>Cód. ${ors.length>1?'origen':esc(NOMBRE[ors[0]]||'')}</th><th>Descripción</th><th>Cód. ${esc(NOMBRE[p.sede]||'')}</th><th class="num">Cant.</th></tr>
+      ${p.items.map((i,k)=>`<tr><td>${k+1}</td>${ors.length>1?`<td>${esc(NOMBRE[i.origen]||i.origen)}</td>`:''}<td class="cod">${esc(i.cod_origen)}</td><td>${esc(i.descripcion)}</td><td class="cod">${esc(i.cod_sede)}</td><td class="num"><b>${i.cantidad}</b></td></tr>`).join('')}
       </table>
       <div class="acciones">
         <button class="wa" data-wa="${esc(p.numero)}">📲 Compartir</button>
         <button data-pdf="${esc(p.numero)}">⬇ PDF</button>
-        ${puedeCot?`<input type="text" placeholder="N° de cotización" data-nc="${esc(p.numero)}" style="width:160px"><button class="am" data-cot="${esc(p.numero)}">Marcar cotizado</button>`:''}
-        ${esMia(p)&&p.estado==='Enviado'?`<button class="gris" data-anular="${esc(p.numero)}">Anular</button>`:''}
+        ${porCotizar.map(o=>`<input type="text" placeholder="N° cotización${porCotizar.length>1||S.sede==='ADMIN'?' '+(NOMBRE[o]||o):''}" data-nc="${esc(p.numero)}|${o}" style="width:190px"><button class="am" data-cot="${esc(p.numero)}|${o}">Marcar cotizado</button>`).join('')}
+        ${esMia(p)&&p.estado==='Enviado'&&!Object.keys(cot).length?`<button class="gris" data-anular="${esc(p.numero)}">Anular</button>`:''}
       </div></div>`:''}
     </div>`;}).join('');
-  const por=n=>PED.find(x=>x.numero===n);
+  const por=n=>vista(PED.find(x=>x.numero===n));
   document.querySelectorAll('#pedidos .cab').forEach(c=>c.onclick=()=>{ const n=c.dataset.n; abiertos.has(n)?abiertos.delete(n):abiertos.add(n); pintarPedidos(); });
   document.querySelectorAll('[data-wa]').forEach(b=>b.onclick=()=>compartir(por(b.dataset.wa)));
   document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>bajarPDF(por(b.dataset.pdf)));
   document.querySelectorAll('[data-cot]').forEach(b=>b.onclick=async()=>{
-    const nro=document.querySelector(`[data-nc="${b.dataset.cot}"]`).value.trim();
+    const [num,o]=b.dataset.cot.split('|'), nro=document.querySelector(`[data-nc="${b.dataset.cot}"]`).value.trim();
     if (!nro) return toast('Escribe el número de cotización de Profit.');
-    b.disabled=true; try{ await api({accion:'cotizar', numero:b.dataset.cot, nro_cotizacion:nro}); toast('✅ Marcado como cotizado'); await refrescar(); }catch(e){ toast('⚠ '+e.message); b.disabled=false; }
+    b.disabled=true; try{ await api({accion:'cotizar', numero:num, origen:o, nro_cotizacion:nro}); toast('✅ Marcado como cotizado'); await refrescar(); }catch(e){ toast('⚠ '+e.message); b.disabled=false; }
   });
   document.querySelectorAll('[data-anular]').forEach(b=>b.onclick=async()=>{
     if (!b.dataset.c){ b.dataset.c='1'; b.textContent='¿Anular? toca otra vez'; return; }

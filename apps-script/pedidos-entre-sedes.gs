@@ -101,7 +101,12 @@ function listar(sede) {
   const sols = leer(H_SOL).filter(p => puedeVer(sede, p) && String(p.fecha) >= limite);
   const nums = new Set(sols.map(p => p.numero)), det = {};
   leer(H_DET).forEach(it => { if (nums.has(it.numero)) { const o = Object.assign({}, it); delete o._fila; (det[it.numero] = det[it.numero] || []).push(o); } });
-  return sols.map(p => { const o = Object.assign({}, p); delete o._fila; o.items = (det[p.numero] || []).sort((a, b) => a.n - b.n); return o; })
+  return sols.map(p => {
+    const o = Object.assign({}, p); delete o._fila;
+    let its = (det[p.numero] || []).sort((a, b) => a.n - b.n);
+    if (sede !== 'ADMIN' && p.sede !== sede) its = its.filter(i => i.origen === sede);   // cada sede ve solo lo que le piden a ella
+    o.items = its; return o;
+  })
              .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || String(b.numero).localeCompare(String(a.numero)));
 }
 
@@ -131,24 +136,34 @@ function crear(sede, b) {
   return { ok: true, numero, fecha };
 }
 
-/* Quien tomó el pedido anota la cotización (opcional) */
+/* Cotización por sede de origen: "GUAIRA:00045, CHAG:00046" */
+function mapa(t) { const m = {}; String(t || '').split(',').forEach(x => { const i = x.indexOf(':'); if (i > 0) m[x.slice(0, i).trim()] = x.slice(i + 1).trim(); }); return m; }
+function texto(m) { return Object.keys(m).map(k => k + ':' + m[k]).join(', '); }
+
+/* Quien tomó el pedido anota su cotización (opcional) */
 function cotizar(sede, b) {
   const p = leer(H_SOL).find(x => x.numero === b.numero);
   if (!p) throw new Error('Pedido no encontrado');
-  if (sede !== 'ADMIN' && p.sede === sede) throw new Error('La cotización la anota quien toma el pedido');
+  const origenes = String(p.origenes).split(',');
+  const origen = sede === 'ADMIN' ? b.origen : sede;
+  if (!origenes.includes(origen)) throw new Error('A tu sede no le pidieron nada en este pedido');
   if (p.estado === 'Anulado') throw new Error('El pedido está anulado');
   if (!String(b.nro_cotizacion || '').trim()) throw new Error('Escribe el número de cotización');
-  p.estado = 'Cotizado'; p.nro_cotizacion = String(b.nro_cotizacion).trim().slice(0, 30);
-  p.cotizado_por = String(b.por || '').slice(0, 40); p.actualizado = ahora();
+  const cot = mapa(p.nro_cotizacion), por = mapa(p.cotizado_por);
+  cot[origen] = String(b.nro_cotizacion).trim().slice(0, 30).replace(/[:,]/g, ' ');
+  por[origen] = String(b.por || '').slice(0, 40).replace(/[:,]/g, ' ');
+  p.nro_cotizacion = texto(cot); p.cotizado_por = texto(por);
+  p.estado = origenes.every(o => cot[o]) ? 'Cotizado' : 'Enviado';
+  p.actualizado = ahora();
   escribirFila(H_SOL, COL_SOL, p);
-  return { ok: true };
+  return { ok: true, estado: p.estado };
 }
 
 function anular(sede, b) {
   const p = leer(H_SOL).find(x => x.numero === b.numero);
   if (!p) throw new Error('Pedido no encontrado');
   if (sede !== 'ADMIN' && p.sede !== sede) throw new Error('Solo la sede que pidió puede anularlo');
-  if (p.estado !== 'Enviado') throw new Error('Ya fue cotizado; no se puede anular');
+  if (p.estado !== 'Enviado' || String(p.nro_cotizacion || '').trim()) throw new Error('Ya lo están cotizando; no se puede anular');
   p.estado = 'Anulado'; p.actualizado = ahora();
   escribirFila(H_SOL, COL_SOL, p);
   return { ok: true };
