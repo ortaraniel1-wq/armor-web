@@ -10,6 +10,8 @@ App interna para que una sede pida a otra mercancía. Sedes: **BOLEITA** (Boleí
 
 ### Flujo acordado (con la gerente de ventas – no cambiar sin preguntar)
 1. La sede entra con nombre + PIN y en **Pedir** ve lo que tiene en 0 y existe en otra sede. Con el buscador (≥2 letras) también salen productos que sí tiene (etiqueta "Aquí hay N") para reponer.
+   - **Buscador (2+ letras): busca en TODOS los productos** (también los que ninguna otra sede tiene: salen con la etiqueta "Sin existencia en otras sedes" y no se pueden pedir) y entiende el **código de cualquier sede** (el mismo producto tiene distinto código en cada sede). Al buscar no se aplican los filtros de rubro ni de "Traer de". Si "Traer de" tiene una sede y esa sede tiene existencia, el renglón se pide a esa sede; si no, a la que más tiene. El origen elegido se guarda con la cantidad (`ediciones[k].origen`).
+   - **Sin buscar, la lista no cambia**: solo lo que otra sede puede surtir, cada producto en la sede que más tiene (probado: mismas cantidades que antes).
 2. Envía el pedido → se genera **un PDF por sede que despacha** y se comparte al grupo de WhatsApp "Pedidos".
 3. Quien cotiza en la sede que despacha ajusta la **cantidad asignada** y pulsa **⚙ Generar cotización en Profit** (o anota el número a mano).
 4. El puente de esa sede crea la cotización en Profit Plus y el número vuelve a la página.
