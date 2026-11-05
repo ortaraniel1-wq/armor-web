@@ -4688,28 +4688,40 @@ document.querySelectorAll('.card').forEach(function(card){
     if(!e){e=document.createElement('p');e.className=cls;var w=card.querySelector('.qty')||card.querySelector('.wa');w.parentNode.insertBefore(e,w);}
     e.textContent=txt;}
   function oferta(card,p){var e=card.querySelector('.ofd');var nr=+card.dataset.normal||0;if(card.dataset.deal&&p>0&&nr&&p<nr-0.005&&new Date()<new Date('2026-10-20T09:00:00-04:00')){if(!e){e=document.createElement('p');e.className='ofd';var w=card.querySelector('.disp')||card.querySelector('.cod')||card.querySelector('.qty')||card.querySelector('.wa');w.parentNode.insertBefore(e,w);}e.innerHTML='\u{1F525} <b>Oferta Armor Deals</b> \u00b7 el martes 20/10 vuelve a <s>'+fmt(nr)+'</s>';}else if(e)e.remove();}
-  function aplicar(card,cod,D){var d=D[cod];if(!d){linea(card,'cod',/^B[0-9]+$/.test(cod)?'Cód. Boleíta: '+cod.slice(1):barra(cod)?'Barra: '+cod:'');return;}var tag=card.querySelector('.tag');
+  function aplicar(card,cod,D){var d=D[cod];if(!d){linea(card,'disp','No disponible en '+SN[SEDE]);linea(card,'cod',barra(cod)?'Barra: '+cod:'');card.classList.add('agotado');card.dataset.max=1;return;}var tag=card.querySelector('.tag');
     if(tag&&!card.dataset.normal)card.dataset.normal=num(tag.textContent);
     var uu=+card.dataset.unid||0;if(d[0]>0&&tag&&!(uu&&Math.abs(d[0]-uu)<0.01)){tag.textContent=fmt(d[0]);}
     var bar=barra(cod),n=Math.max(0,Math.floor(d[1]||0));
     setWa(card,tag?tag.textContent:'',d[2],bar);
-    linea(card,'disp',n>0?(n===1?'1 disponible':n+' disponibles')+(SEDE!=='B'?' en '+SN[SEDE]:''):(d.nd?'No disponible en '+SN[SEDE]:''));
+    linea(card,'disp',n>0?(n===1?'1 disponible':n+' disponibles')+' en '+SN[SEDE]:'No disponible en '+SN[SEDE]);
     linea(card,'cod',[d.nd?'':(SEDE!=='B'?(d[2]?'Cód. '+SN[SEDE]+': '+d[2]:''):((d[2]||(/^B[0-9]+$/.test(cod)?cod.slice(1):''))?'Cód. Boleíta: '+(d[2]||cod.slice(1)):'')),bar?'Barra: '+bar:''].filter(Boolean).join(' · '));
     card.dataset.max=n>0?n:1;card.classList.toggle('agotado',d[1]===0);oferta(card,d[0]);
     if(window.armorQty)window.armorQty(card);}
-  function get(u){return fetch(u+(u.indexOf('?')<0?'?':'&')+'t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).catch(function(){return null});}
-  var BASE=m.content,BJ=null,SJ={},listo=false;
-  function pintar(){if(!BJ||!BJ.p)return;var D=BJ.p,X=SEDE!=='B'&&SJ[SEDE]&&SJ[SEDE].p;
+  function get(u){var ac=window.AbortController?new AbortController():null,tm=ac?setTimeout(function(){ac.abort();},10000):0;return fetch(u+(u.indexOf('?')<0?'?':'&')+'t='+Date.now(),{cache:'no-store',signal:ac?ac.signal:undefined}).then(function(r){clearTimeout(tm);return r.ok?r.json():null}).catch(function(){clearTimeout(tm);return null});}
+  var BASE=m.content,BJ=null,SJ={};
+  var notice=document.createElement('div');notice.className='am-stock-status';
+  var stockText=document.createElement('p');stockText.setAttribute('role','status');stockText.setAttribute('aria-live','polite');
+  var retry=document.createElement('button');retry.type='button';retry.textContent='Reintentar';retry.hidden=true;
+  notice.appendChild(stockText);notice.appendChild(retry);
+  var products=document.querySelector('main.am-products');if(products)products.parentNode.insertBefore(notice,products);
+  function status(kind,j){
+    notice.dataset.state=kind;retry.hidden=kind!=='error';
+    if(products){products.hidden=kind==='loading';products.setAttribute('aria-busy',String(kind==='loading'));}
+    stockText.textContent=kind==='loading'?'Consultando disponibilidad en '+SN[SEDE]+'…':kind==='error'?'No pudimos consultar el inventario de '+SN[SEDE]+'. Precios y disponibilidad pueden no estar al día. Reintenta o cambia de sede.':'Disponibilidad en '+SN[SEDE]+' · '+(j.actualizado?'Actualizado: '+j.actualizado:'Fecha de actualización no informada');
+  }
+  function pintar(){var source=SEDE==='B'?BJ:SJ[SEDE];if(!BJ||!BJ.p||!source||!source.p){window.ARMOR_D={};status('error');return;}var D=BJ.p,X=SEDE!=='B'&&source.p;
     if(X){D={};Object.keys(BJ.p).forEach(function(k){var b=BJ.p[k],x=X[k];if(x){D[k]=[x[0]>0?x[0]:b[0],x[1],x[2]];}else{var z=[b[0],0,''];z.nd=1;D[k]=z;}});}
     document.querySelectorAll('.card').forEach(function(card){var main=card.querySelector('.main');if(!main)return;
       var sws=card.querySelectorAll('.sw[data-cod]');
       sws.forEach(function(b){var d=D[b.dataset.cod];if(!d)return;if(d[0]>0)b.dataset.price=fmt(d[0]);b.classList.toggle('agot',d[1]===0);
         if(!b.dataset.ab){b.dataset.ab=1;b.addEventListener('click',function(){aplicar(card,b.dataset.cod,window.ARMOR_D||D);});}});
       var on=card.querySelector('.sw.on[data-cod]');var cod=on?on.dataset.cod:main.dataset.cod;if(cod)aplicar(card,cod,D);});
-    window.ARMOR_D=D;if(window.armorCatalogRender)window.armorCatalogRender();}
-  function cargarSede(){if(SEDE==='B'||SJ[SEDE]!==undefined){pintar();return;}
+    window.ARMOR_D=D;status('ready',source);if(window.armorCatalogRender)window.armorCatalogRender();}
+  function cargarSede(){status('loading');window.ARMOR_D={};if(SEDE==='B'||SJ[SEDE]){pintar();return;}
     var s=SEDE;get(BASE.replace(/stock\.json/,SF[s])).then(function(j){SJ[s]=j&&j.p?j:null;if(s===SEDE)pintar();});}
-  get(BASE).then(function(j){BJ=j;cargarSede();});
+  function iniciar(){status('loading');get(BASE).then(function(j){BJ=j;cargarSede();});}
+  retry.addEventListener('click',function(){if(!BJ||!BJ.p)iniciar();else cargarSede();});
+  iniciar();
   document.addEventListener('armor-sede',function(e){var k=e.detail;if(!SN[k]||k===SEDE)return;SEDE=k;cargarSede();});
 })();
 </script>
