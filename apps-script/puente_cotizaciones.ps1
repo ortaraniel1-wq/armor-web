@@ -83,7 +83,7 @@ function Crear-Cotizacion($cn, $ped) {
         [void]$cmd.ExecuteNonQuery()
 
         # 3) encabezado
-        $hoy = (Get-Date).Date; $ahora = Get-Date
+        $hoy = (Get-Date).Date; $ahora = Get-Date; $ahora = $ahora.AddTicks(-($ahora.Ticks % 10000000))  # sin milisegundos: Profit solo guarda segundos y si no coincide dice "alterada por otro usuario"
         $cmd.CommandText = @"
 INSERT INTO cotiz_c (fact_num, contrib, nombre, rif, nit, status, comentario, descrip, saldo, fec_emis, fec_venc,
   co_cli, co_ven, co_tran, dir_ent, forma_pag, tot_bruto, tot_neto, glob_desc, tot_reca, porc_gdesc, porc_reca,
