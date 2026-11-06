@@ -252,7 +252,7 @@ function agrupar(json){
     if (!g){ g={barra, stock:0, desc:'', linea:'', mejor:-1e9}; m.set(barra,g); }
     const s=Number(r[c.stock_total])||0;
     g.stock+=s;
-    if (s>g.mejor || !g.desc){ g.mejor=s; g.desc=String(r[c.descripcion]).trim(); g.linea=r[c.linea]; g.codigo=r[c.codigo]; g.unidad=uniN(c.unidad!==undefined?r[c.unidad]:''); }
+    if (s>g.mejor || !g.desc){ g.mejor=s; g.desc=String(r[c.descripcion]).trim(); g.linea=r[c.linea]; g.codigo=r[c.codigo]; g.unidad=uniN(c.unidad!==undefined?r[c.unidad]:''); g.equi=c.equi_uni1!==undefined?(Number(r[c.equi_uni1])||0):0; }
   }
   return m;
 }
@@ -286,7 +286,7 @@ function calcular(){
     if (d && ['SERV','MINER'].includes(d.linea)) continue;
     const hay=sa>0||sb>0;                                   // ¿alguna otra sede tiene existencia?
     const origen=hay ? (sa>=sb?k1:k2) : (a?k1:k2), o=origen===k1?a:b;
-    const of={}; of[k1]=a?{stock:a.stock, cod:a.codigo, uni:a.unidad||''}:null; of[k2]=b?{stock:b.stock, cod:b.codigo, uni:b.unidad||''}:null;
+    const of={}; of[k1]=a?{stock:a.stock, cod:a.codigo, uni:a.unidad||'', equi:a.equi||0}:null; of[k2]=b?{stock:b.stock, cod:b.codigo, uni:b.unidad||'', equi:b.equi||0}:null;
     const f={ k:dest+'|'+barra, barra, desc:(d||o).desc,
       rubro: d?(RUBROS[d.linea]||RUBROS[o.linea]||'OTROS'):noCod(),
       codB: d?d.codigo:'—', origen, otras, of, tengo, sinOtras:!hay };
@@ -307,7 +307,12 @@ function vistaFila(f){
     o=(og && f.of[og] && f.of[og].stock>0) ? og : f.origen;
   }
   const x=f.of[o]||{stock:0,cod:'—',uni:''}, oo=f.otras.find(s=>s!==o), y=f.of[oo];
-  return Object.assign({}, f, { origen:o, codO:x.cod, disp:x.stock, uni:x.uni, otraSede:oo, otro:y?y.stock:0 });
+  return Object.assign({}, f, { origen:o, codO:x.cod, disp:x.stock, uni:x.uni, equi:x.equi||0, otraSede:oo, otro:y?y.stock:0 });
+}
+// Disponible como en la lista de precios: si el artículo viene por caja, "2 cj · 50 und"
+function dispTxt(f){
+  if (f.equi>1) return Math.floor(f.disp/f.equi)+' cj · '+f.disp.toLocaleString('en-US')+' <span class="uni">und</span>';
+  return f.disp+' <span class="uni">'+esc(f.uni)+'</span>';
 }
 function origenFiltro(f){ const e=ediciones[f.k]; return (e&&e.origen)||f.origen; }
 function cant(f){ return Number((ediciones[f.k]||{}).pedir||0) }
@@ -332,7 +337,7 @@ function pintar(){
       <td>${esc(f.desc)} ${f.rubro===noCod()?'<span class="tag r">crear código</span>':''}${f.tengo>0?` <span class="tag">Aquí hay ${f.tengo}</span>`:''}${f.sinOtras?' <span class="tag r">Sin existencia en otras sedes</span>':''}</td>
       <td class="cod">${esc(f.codB)}</td><td class="cod">${esc(f.barra)}</td>
       <td><span class="sede">${SEDES[f.origen].nombre}</span><br><span class="cod">cód. ${esc(f.codO)}</span>${f.otro>0?`<br><span class="tag">${SEDES[f.otraSede].nombre}: ${f.otro}</span>`:''}</td>
-      <td class="num">${f.disp} <span class="uni">${esc(f.uni)}</span></td>
+      <td class="num">${dispTxt(f)}</td>
       <td class="num"><span class="step"><button type="button" data-d="-1" aria-label="menos">−</button><input type="number" inputmode="numeric" min="0" max="${f.disp}" value="${cant(f)}"${f.disp<=0?' disabled':''}><button type="button" data-d="1" aria-label="más">+</button></span></td></tr>`).join('')+
     (v.length>LIM?`<tr><td colspan="6" style="text-align:center;color:#888">Mostrando ${LIM} de ${v.length}. Usa el buscador o elige un rubro.</td></tr>`:'');
   document.querySelectorAll('#cuerpo input').forEach(inp=>{
