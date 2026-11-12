@@ -25,3 +25,8 @@
   Cache-Control: no-cache
 /fotos-live.js
   Cache-Control: no-cache
+
+# Alerta interna de negativos de inventario: fuera de Google
+/negativos*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-cache

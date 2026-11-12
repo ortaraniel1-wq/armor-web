@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Negativos · Armor Market</title>
+<style>
+:root{--y:#FDF500;--k:#16171A;--g:#f3f3ef;--b:#e2e2dc;--ok:#1f9d55;--er:#c62828;--wa:#b26a00}
+*{box-sizing:border-box}body{margin:0;font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--g);color:var(--k)}
+header{background:var(--k);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header b{color:var(--y);font-size:18px}header span{opacity:.7;font-size:13px}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.box{background:#fff;border:1px solid var(--b);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 10px;font-size:17px}
+input,button,select{font:inherit}
+input[type=text],select{width:100%;padding:10px 12px;border:1px solid var(--b);border-radius:10px;font-size:16px;background:#fff}
+button{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;background:var(--y);color:var(--k)}
+button.sec{background:#eee}button.dark{background:var(--k);color:#fff}button.on{background:var(--k);color:var(--y)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>.g{flex:1 1 220px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.card{border:1px solid var(--b);border-radius:12px;padding:10px 12px;background:#fafaf7}
+.card b{display:block;font-size:24px}.card small{color:#666}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--b);text-align:left;vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:#666;position:sticky;top:0;background:#fff}
+td.n,th.n{text-align:right;white-space:nowrap}
+.neg{color:var(--er);font-weight:700}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;margin:1px 3px 1px 0;white-space:nowrap}
+.t-u{background:#fff3d6;color:var(--wa)}.t-n{background:#fdeaea;color:var(--er)}.t-m{background:#e8eefc;color:#2b4fa3}
+.hint{color:#666;font-size:13px}
+.msg{padding:10px 12px;border-radius:10px;margin-top:10px}.msg.er{background:#fdeaea;color:var(--er)}
+.wrap{overflow:auto;max-height:70vh;border:1px solid var(--b);border-radius:10px}
+</style></head><body>
+<header><b>ARMOR · Negativos de inventario</b><span id="act"></span></header>
+<main>
+<section class="box">
+  <div class="row">
+    <div class="g" style="flex:0 0 220px"><select id="sede" aria-label="Sede"></select></div>
+    <div class="g"><input type="text" id="q" placeholder="Buscar por código, barra o nombre"></div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="f-todos" class="on">Todos</button>
+    <button id="f-uni" class="sec">Revisar unidades</button>
+    <button id="f-nuevo" class="sec">Nuevos o peores</button>
+    <span style="flex:1 1 auto"></span>
+    <button id="visto" class="dark">Marcar todo como visto</button>
+    <button id="csv" class="sec">Bajar CSV</button>
+  </div>
+  <p class="hint" style="margin:10px 0 0">Un negativo es un aviso, no un dato: puede ser un error de unidades (caja contra unidad), una recepción sin cargar o una venta adelantada (prevendido).
+  <b>Revisar unidades</b> marca los productos por caja o con relación 4, donde ya se descuadró el stock.
+  <b>Nuevos o peores</b> compara con la última vez que pulsaste «Marcar todo como visto» en este navegador.</p>
+</section>
+<section class="box">
+  <div class="cards" id="cards"></div>
+</section>
+<section class="box">
+  <div class="wrap"><table>
+    <thead><tr><th>Código</th><th>Descripción</th><th>Línea</th><th class="n">Stock</th><th>Unidad</th><th>Aviso</th></tr></thead>
+    <tbody id="tb"></tbody>
+  </table></div>
+  <div class="row" style="margin-top:10px"><button id="mas" class="sec" style="display:none">Ver más</button><span class="hint" id="pie"></span></div>
+  <div class="msg er" id="err" style="display:none"></div>
+</section>
+</main>
+<script>
+(function(){
+var RAW='https://raw.githubusercontent.com/ortaraniel1-wq/armor-catalogo-datos/main/';
+var SEDES={BOLEITA:'Boleíta',CHAG:'Chaguaramos',GUAIRA:'La Guaira'};
+var $=function(i){return document.getElementById(i)};
+var sede='BOLEITA',filtro='todos',filas=[],snap={},lim=300,actualizado='';
+try{var s0=localStorage.getItem('neg_sede');if(SEDES[s0])sede=s0;}catch(e){}
+var sel=$('sede');Object.keys(SEDES).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=SEDES[k];sel.appendChild(o);});sel.value=sede;
+function norm(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
+function fmt(n){return (Math.round(n*100)/100).toLocaleString('es-VE');}
+function claveSnap(){return 'neg_vistos_'+sede;}
+function leerSnap(){snap=null;try{var j=localStorage.getItem(claveSnap());if(j)snap=JSON.parse(j);}catch(e){}}
+function cargar(){
+  $('err').style.display='none';$('tb').innerHTML='';$('cards').innerHTML='';$('act').textContent='Cargando…';
+  leerSnap();
+  fetch(RAW+'conteo_'+sede+'.json?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('No se pudo leer el inventario ('+r.status+')');return r.json();}).then(function(j){
+    var c=j.cols,ix={};c.forEach(function(n,i){ix[n]=i;});
+    var alm=c.filter(function(n){return n.indexOf('stock_')===0&&n!=='stock_total';});
+    actualizado=j.actualizado||'';filas=[];
+    j.items.forEach(function(r){
+      var st=+r[ix.stock_total];if(!(st<0))return;
+      var eq=+r[ix.equi_uni1]||1,rel=+r[ix.relac_aut]||1,un=String(r[ix.unidad]||'').trim();
+      var riesgo=(un==='CAJA'&&eq>1)||rel===4;
+      var mult=eq>1&&Math.abs(st)%eq===0;
+      var cod=String(r[ix.codigo]).trim();
+      var estado='';
+      if(snap){if(!(cod in snap))estado='nuevo';else if(st<snap[cod])estado='peor';}
+      filas.push({cod:cod,barra:String(r[ix.barra]||'').trim(),desc:String(r[ix.descripcion]||'').trim(),linea:String(r[ix.linea]||'').trim(),
+        st:st,un:un,eq:eq,rel:rel,riesgo:riesgo,mult:mult,estado:estado,
+        alm:alm.map(function(n){return n.replace('stock_','')+': '+fmt(+r[ix[n]]);}).join(' · '),buscar:norm(cod+' '+r[ix.barra]+' '+r[ix.ref]+' '+r[ix.descripcion])});
+    });
+    filas.sort(function(a,b){return a.st-b.st;});
+    $('act').textContent=SEDES[sede]+' · Inventario: '+actualizado;
+    lim=300;pintar();
+  }).catch(function(e){$('act').textContent='';var m=$('err');m.textContent=e.message+'. Revisa tu conexión y recarga.';m.style.display='block';});
+}
+function visibles(){
+  var q=norm($('q').value.trim()),ws=q?q.split(/\s+/):[];
+  return filas.filter(function(f){
+    if(filtro==='uni'&&!f.riesgo)return false;
+    if(filtro==='nuevo'&&!f.estado)return false;
+    for(var i=0;i<ws.length;i++){if(f.buscar.indexOf(ws[i])<0)return false;}
+    return true;});
+}
+function tag(t,cls){var s=document.createElement('span');s.className='tag '+cls;s.textContent=t;return s;}
+function card(n,t){var d=document.createElement('div');d.className='card';var b=document.createElement('b');b.textContent=n;var s=document.createElement('small');s.textContent=t;d.appendChild(b);d.appendChild(s);return d;}
+function pintar(){
+  var v=visibles(),cs=$('cards');cs.innerHTML='';
+  cs.appendChild(card(filas.length,'artículos en negativo'));
+  cs.appendChild(card(filas.filter(function(f){return f.riesgo;}).length,'por caja / relación 4 (revisar unidades)'));
+  cs.appendChild(card(snap?filas.filter(function(f){return f.estado;}).length:'—',snap?'nuevos o peores desde tu última revisión':'sin revisión previa: pulsa «Marcar todo como visto»'));
+  var tb=$('tb');tb.innerHTML='';
+  v.slice(0,lim).forEach(function(f){
+    var tr=document.createElement('tr');
+    var c1=document.createElement('td');c1.textContent=f.cod;if(f.barra){var br=document.createElement('div');br.className='hint';br.textContent=f.barra;c1.appendChild(br);}
+    var c2=document.createElement('td');c2.textContent=f.desc;
+    var c3=document.createElement('td');c3.textContent=f.linea;
+    var c4=document.createElement('td');c4.className='n neg';c4.textContent=fmt(f.st);if(f.alm.indexOf(' · ')>=0){var al=document.createElement('div');al.className='hint';al.style.fontWeight='400';al.textContent=f.alm;c4.appendChild(al);}
+    var c5=document.createElement('td');c5.textContent=f.un+(f.eq>1?' ×'+fmt(f.eq):'')+(f.rel===4?' · rel. 4':'');
+    var c6=document.createElement('td');
+    if(f.estado==='nuevo')c6.appendChild(tag('Nuevo','t-n'));if(f.estado==='peor')c6.appendChild(tag('Empeoró','t-n'));
+    if(f.riesgo)c6.appendChild(tag('Revisar unidades','t-u'));
+    if(f.mult)c6.appendChild(tag('Múltiplo de '+fmt(f.eq),'t-m'));
+    [c1,c2,c3,c4,c5,c6].forEach(function(c){tr.appendChild(c);});tb.appendChild(tr);
+  });
+  $('mas').style.display=v.length>lim?'':'none';
+  $('pie').textContent=v.length?('Mostrando '+Math.min(lim,v.length)+' de '+v.length):'Sin resultados con ese filtro.';
+}
+function setFiltro(f){filtro=f;['todos','uni','nuevo'].forEach(function(k){$('f-'+k).className=(k===f?'on':'sec');});lim=300;pintar();}
+$('f-todos').onclick=function(){setFiltro('todos')};$('f-uni').onclick=function(){setFiltro('uni')};$('f-nuevo').onclick=function(){setFiltro('nuevo')};
+$('q').oninput=function(){lim=300;pintar();};
+$('mas').onclick=function(){lim+=300;pintar();};
+sel.onchange=function(){sede=sel.value;try{localStorage.setItem('neg_sede',sede);}catch(e){}filtro='todos';setFiltro('todos');cargar();};
+$('visto').onclick=function(){
+  var o={};filas.forEach(function(f){o[f.cod]=f.st;});
+  try{localStorage.setItem(claveSnap(),JSON.stringify(o));}catch(e){}
+  leerSnap();filas.forEach(function(f){f.estado='';});pintar();
+};
+$('csv').onclick=function(){
+  var v=visibles(),l=['codigo;barra;descripcion;linea;stock;unidad;equivalencia;relacion;aviso'];
+  function q(s){return '"'+String(s).replace(/"/g,'""')+'"';}
+  v.forEach(function(f){l.push([q(f.cod),q(f.barra),q(f.desc),q(f.linea),f.st,q(f.un),f.eq,f.rel,q((f.riesgo?'Revisar unidades ':'')+(f.mult?'Multiplo ':'')+(f.estado||''))].join(';'));});
+  var b=new Blob(['﻿'+l.join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download='negativos_'+sede+'.csv';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+};
+cargar();
+})();
+</script>
+</body></html>

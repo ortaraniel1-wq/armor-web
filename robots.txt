@@ -3,5 +3,6 @@ Allow: /
 Disallow: /pedidos
 Disallow: /fotos
 Disallow: /chequeo
+Disallow: /negativos
 
 Sitemap: https://hiperarmormarket.com/sitemap.xml
