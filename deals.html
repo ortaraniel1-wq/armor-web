@@ -2675,12 +2675,23 @@ document.querySelectorAll('.card').forEach(function(card){
   function norm(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
   function precio(c){return parseFloat(c.dataset.precio||c.dataset.oferta||c.dataset.antes||0);}
   function pct(c){var a=+c.dataset.antes,p=precio(c);return a&&p&&p<a?1-p/a:0;}
+  /* Puntos de "Destacadas": foto real + % de descuento + dólares ahorrados. */
+  function pts(c){var im=c.querySelector('img.main'),foto=im&&!/logo\.png/.test(im.getAttribute('src')||'')?1:0,a=+c.dataset.antes||0,p=precio(c),ah=a>p?a-p:0;
+    return foto*50+Math.min(pct(c),.5)*60+Math.min(ah,150)/150*60;}
   function render(){
     var words=norm(q.value).split(/\s+/).filter(Boolean);
     var L=cards.filter(function(c){if(cat!=='todo'&&c.dataset.cat!==cat)return false;if(grp&&c.dataset.grp!==grp)return false;var t=c.dataset.q;return words.every(function(w){return t.indexOf(w)>=0;});});
     var o=sel.value;
-    L.sort(function(a,b){if(o==='desc')return pct(b)-pct(a);if(o==='barato')return precio(a)-precio(b);if(o==='caro')return precio(b)-precio(a);return a.dataset.i-b.dataset.i;});
+    L.sort(function(a,b){if(o==='desc')return pct(b)-pct(a);if(o==='barato')return precio(a)-precio(b);if(o==='caro')return precio(b)-precio(a);return pts(b)-pts(a)||a.dataset.i-b.dataset.i;});
     var ag=function(c){return c.classList.contains('agotado')?1:0;};L.sort(function(a,b){return ag(a)-ag(b);});
+    /* Destacadas sin filtro ni búsqueda: se intercalan tecnología, hogar y bodegón para que las primeras 24 muestren de todo. */
+    if(o==='dest'&&cat==='todo'&&!grp&&!words.length){
+      var disp=L.filter(function(c){return !ag(c);}),agot=L.filter(ag),B={tecno:[],hogar:[],bodegon:[]},otros=[];
+      disp.forEach(function(c){(B[c.dataset.cat]||otros).push(c);});
+      var mix=[],pat=['tecno','hogar','bodegon','tecno','hogar'],k=0,guard=disp.length*5;
+      while(mix.length<disp.length-otros.length&&guard-->0){var b=B[pat[k++%pat.length]];if(b.length)mix.push(b.shift());}
+      L=mix.concat(B.tecno,B.hogar,B.bodegon,otros,agot);
+    }
     cards.forEach(function(c){c.hidden=true;});
     L.forEach(function(c,i){grid.appendChild(c);c.hidden=i>=shown;});
     var rest=L.length-Math.min(shown,L.length);
