@@ -3,7 +3,7 @@
   const groups = [
     ['tecnologia','Tecnología',['celulares','laptops','tablets','relojes','computacion','redes','cargadores','radios','patinetas']],
     ['audio-video','Audio y video',['tv','barras','fiesta','portatiles','audifonos','microfonos','camara','video']],
-    ['hogar-cocina','Hogar y cocina',['hogar','smart','difusores','blancos','inflables','cocina','electro']],
+    ['hogar-cocina','Hogar y cocina',['hogar','limpieza','smart','difusores','blancos','inflables','cocina','electro']],
     ['belleza-bienestar','Belleza y bienestar',['cuidado','salud']],
     ['bebes-ninos','Bebés y niños',['ninos']],
     ['alimentos-bebidas','Alimentos y bebidas',['alimentos','licores']],
