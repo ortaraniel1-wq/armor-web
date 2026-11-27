@@ -219,13 +219,26 @@ nav a.hot:hover{background:#FDF500;color:#16171A}
 .card.deal .off{background:#18A043;color:#fff;border-radius:999px;font-size:18px;padding:7px 11px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 @media (max-width:560px){.card.deal .off{font-size:15px;padding:5px 9px}}
 @media print{.dealhero::before{display:none}}
+/* Cabecera con banner (imagen 3:1; en móvil recorte con texto y botón) */
+.dealhero{background:#0b0c0c}
+.dealhero::after{display:none}
+.bfsr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.bfban{position:relative;max-width:1600px;margin:12px auto 0}
+.bfban picture,.bfban img{display:block;width:100%;height:auto}
+.bfgo{position:absolute;left:41.7%;top:72%;width:17.6%;height:13.9%;border-radius:12px}
+.bfgo:focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 6px #16171A}
+.dealhero .in{padding-top:22px;padding-bottom:28px}
+.dealhero .cd{margin-top:0}
+@media (max-width:700px){.bfgo{left:68%;top:66%;width:29%;height:25%}.dealhero .in{padding:16px 16px 24px}}
+html{scroll-behavior:smooth}#deals{scroll-margin-top:12px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+html.dwait body:not([data-preview]) .bfgo{display:none}
+
 </style><link rel="stylesheet" href="armor-deals-status.css"><script src="armor-deals-config.js"></script><script src="armor-deals-status.js"></script></head><body data-preview="1">
-<header class="dealhero"><div class="in">
-<p class="kick bfk">SOLO 4 DÍAS</p>
-<h1 class="bfh">BLACK FRIDAY <span>ARMOR</span></h1>
-<p class="fechas">OFERTAS DEL 27 AL 30 DE NOVIEMBRE · EL LUNES HASTA LAS 8:00 P. M.</p>
+<header class="dealhero"><h1 class="bfsr">Black Friday Armor</h1>
+<div class="bfban"><picture><source media="(max-width:700px)" srcset="img/banner/blackfriday-cabecera-m.webp" type="image/webp"><source srcset="img/banner/blackfriday-cabecera.webp" type="image/webp"><img src="img/banner/blackfriday-cabecera.jpg" width="1600" height="533" fetchpriority="high" decoding="async" alt="Armor Market, Black Friday: tecnología, hogar y bodegón. Del 27 al 30 de noviembre, hasta el lunes a las 8:00 p. m. En Boleíta, Chaguaramos y La Guaira, hasta agotar existencias. hiperarmormarket.com"></picture><a class="bfgo" href="#deals" aria-label="Ver ofertas"></a></div>
+<div class="in">
 <p class="aviso" hidden>Ya puedes ver las ofertas. Los precios de oferta aplican desde el viernes 27 de noviembre.</p>
-<p class="dsub">Boleíta, Chaguaramos y La Guaira. Ofertas en tecnología, hogar y bodegón hasta agotar existencia.</p>
 <div class="cd"><p data-cdt>Termina en</p><div class="cdr"><span class="cdb"><b data-cd="d">--</b><i>días</i></span><span class="cdb"><b data-cd="h">--</b><i>horas</i></span><span class="cdb"><b data-cd="m">--</b><i>min</i></span><span class="cdb"><b data-cd="s">--</b><i>seg</i></span></div></div>
 <div class="go"><a href="#deals" data-go="tecno">Tecnología</a><a href="#deals" data-go="hogar">Hogar</a><a href="#deals" data-go="bodegon">Bodegón</a></div>
 </div></header><div class="bar"></div>
