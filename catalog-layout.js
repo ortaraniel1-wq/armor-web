@@ -4,9 +4,9 @@
     ['tecnologia','Tecnología',['celulares','laptops','tablets','relojes','computacion','redes','cargadores','radios','patinetas']],
     ['audio-video','Audio y video',['tv','barras','fiesta','portatiles','audifonos','microfonos','camara','video']],
     ['hogar-cocina','Hogar y cocina',['hogar','limpieza','smart','difusores','blancos','inflables','cocina','electro']],
-    ['belleza-bienestar','Belleza y bienestar',['cuidado','salud']],
+    ['belleza-bienestar','Belleza y bienestar',['cuid-piel','cuid-cabello','cuid-maquillaje','cuid-perfumes','cuid-desodorantes','cuid-bucal','cuid-afeitado','cuid-secadores','cuid-otros','salud']],
     ['bebes-ninos','Bebés y niños',['ninos']],
-    ['alimentos-bebidas','Alimentos y bebidas',['alimentos','licores']],
+    ['alimentos-bebidas','Alimentos y bebidas',['alim-snacks','alim-cereales','alim-bebidas','alim-cafe','alim-salsas','alim-despensa','licores']],
     ['mascotas','Mascotas',['mascotas']],
     ['negocio-oficina','Negocio y oficina',['negocio']]
   ];
