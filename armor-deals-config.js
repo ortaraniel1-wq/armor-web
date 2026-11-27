@@ -4,5 +4,5 @@
 window.ARMOR_DEALS = {
   enabled: true,
   startsAt: '2026-11-27T00:00:00-04:00',
-  endsAt: '2026-11-30T23:59:59-04:00'
+  endsAt: '2026-11-30T20:00:00-04:00'
 };
